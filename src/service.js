@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'node:fs';
 import path from 'node:path';
 import {configurePaths,packageRoot,fault} from './storage.js';
 import {CodexManager} from './codex.js';
@@ -18,9 +19,12 @@ import {conversationCommands} from './conversation-commands.js';
 import {accountSubscription} from './account-subscription.js';
 import {updateAppearance} from '../public/codex/appearance.js';
 import {ProjectNotifications,projectNotificationsRoute} from './project-notifications.js';
+import {createReleaseAssets} from './release-assets.js';
 
 export const contractVersion=1;
+export const embeddingFeatures={pinnedAssets:true};
 export const apiPrefix='/codex-api/v1';
+const packageVersion=JSON.parse(fs.readFileSync(path.join(packageRoot,'package.json'),'utf8')).version;
 
 export async function createCodexWeb(options) {
   if (!options?.auth?.requireSession || !options.auth.csrf || !options.auth.info) throw Error('An authentication adapter is required');
@@ -64,7 +68,7 @@ export async function createCodexWeb(options) {
   }
   internal.use((req,res,next)=>{try{ctx.auth.requireSession(req);if(!['GET','HEAD'].includes(req.method))ctx.auth.csrf(req);next();}catch(error){next(error);}});
   internal.get('/api/capabilities',(req,res)=>res.json({contractVersion,apiPrefix,standalone:!options.embedded,desktop:{enabled:!!ctx.desktopAdapter},browserState:{queueDatabase:'codex-web-composer-queue',...options.browserState},features:{chat:true,attachments:true,approvals:true}}));
-  internal.get('/api/application',(req,res)=>res.json({service:'codex-web',version:'0.1.0',contractVersion,hotReload:!!options.embedded}));
+  internal.get('/api/application',(req,res)=>res.json({service:'codex-web',version:packageVersion,contractVersion,hotReload:!!options.embedded,release:options.assetVersion||null}));
   internal.get('/api/health',(req,res)=>res.json({ready:true,service:'codex-web',contractVersion}));
   internal.get('/api/profiles',(req,res)=>res.json(ctx.config.profiles));
   internal.put('/api/profiles',async(req,res)=>res.json(await codex.updateProfile(req.body,ctx.save)));
@@ -148,6 +152,7 @@ export async function createCodexWeb(options) {
 
   const middleware=express.Router({strict:true});
   middleware.use((req,res,next)=>{res.set({'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Codex-Web-Contract':String(contractVersion)});next();});
+  if(options.assetVersion)middleware.use((req,res,next)=>{res.set('X-Codex-Web-Release',options.assetVersion);next();});
   middleware.use(apiPrefix,express.json({limit:'12mb'}),(req,res,next)=>{
     const original=req.url;req.url='/api'+req.url;
     internal(req,res,error=>{req.url=original;next(error);});
@@ -158,7 +163,7 @@ export async function createCodexWeb(options) {
     const publicLogin=req.path==='/login.html'||req.path==='/vendor/webauthn.js'||req.path.startsWith('/icons/');
     if(publicLogin)return next();
     try{ctx.auth.requireSession(req);next();}catch(error){if(error.status===401)res.redirect('/login?next='+encodeURIComponent(req.originalUrl));else next(error);}
-  },express.static(path.join(packageRoot,'public','codex'),{dotfiles:'deny',redirect:true}));
+  },options.assetVersion?createReleaseAssets(path.join(packageRoot,'public','codex'),options.assetVersion):express.static(path.join(packageRoot,'public','codex'),{dotfiles:'deny',redirect:true}));
   middleware.use((error,req,res,next)=>{if(res.headersSent){res.destroy();return;}res.status(error.status||500).json({error:error.status?error.message:'Codex Web 服务错误'});});
 
   return {contractVersion,middleware,context:ctx,async close(){

@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const allowedRoots=new Set(['src','adapters','public','scripts','test','docs']);
-const allowedFiles=new Set(['package.json','package-lock.json','README.md','.gitignore','.env.example','NOTICE.md']);
+const allowedFiles=new Set(['package.json','package-lock.json','README.md','AGENTS.md','.gitignore','.env.example','NOTICE.md']);
 const findings=[];let files=0;
 const patterns={
   privateKey:/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
