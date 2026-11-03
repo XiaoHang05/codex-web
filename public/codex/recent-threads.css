@@ -1,0 +1,12 @@
+.sidebar-history{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;overscroll-behavior:contain;overflow-anchor:none}
+.sidebar-history>.thread-list{overflow:visible;min-height:0}
+.recent-threads{padding-bottom:8px;border-bottom:1px solid var(--border)}
+.recent-threads[hidden]{display:none}
+.recent-threads h2{flex-shrink:0;margin:0;padding:8px 7px 5px;color:var(--muted);font-size:12px;font-weight:500}
+.recent-thread-list{display:block}
+.codex-app .recent-thread{display:flex;align-items:center;gap:7px;width:100%;min-height:34px;padding:7px;border:0;border-radius:8px;background:transparent;color:var(--fg);text-align:left;font:inherit;font-size:13px;cursor:pointer}
+.recent-thread:hover,.recent-thread.selected{background:var(--border)!important}
+.recent-thread-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.recent-thread .thread-activity{display:inline-flex;position:relative;flex:0 0 15px;align-items:center;justify-content:center;width:15px;height:15px}
+.recent-thread .thread-activity[hidden]{display:none}
+.sidebar-footer{flex-shrink:0}

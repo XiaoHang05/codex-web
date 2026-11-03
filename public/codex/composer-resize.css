@@ -1,0 +1,32 @@
+.composer-dock,.codex-app .composer{position:relative}
+.composer-height-handle{position:absolute;top:-6px;left:12px;right:12px;height:12px;z-index:3;display:flex;align-items:center;justify-content:center;cursor:ns-resize;touch-action:none;user-select:none;border-radius:6px;outline-offset:-2px}
+.composer-height-handle::after{content:'';width:28px;height:1px;background:var(--muted);opacity:.25}
+.composer-height-handle:hover::after,.composer-height-handle:focus-visible::after,.composer-height-handle.dragging::after{opacity:1;background:var(--fg)}
+.composer-dock[hidden]{display:none}
+.composer-auxiliary{overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;min-height:0}
+.composer-auxiliary-content{display:flow-root;min-width:0}
+.codex-app .composer-auxiliary .requests{max-height:none;padding:0;overflow:visible;max-width:none}
+.composer-auxiliary .composer-queue{max-height:none;overflow:visible;margin-bottom:4px;padding:5px;gap:4px;border-radius:10px}
+.composer-auxiliary .composer-queue-header{padding:0 3px 2px;gap:5px;flex-wrap:wrap}
+.composer-auxiliary .composer-queue-item{gap:5px;padding:4px 6px;border-radius:7px}
+.composer-auxiliary .composer-queue-content{gap:5px}
+.composer-auxiliary .composer-queue-actions{gap:1px}
+.composer-auxiliary .goal-body,.composer-auxiliary .changed-file-list{max-height:none;overflow:visible}
+.codex-app .composer{padding:8px 10px}
+.codex-app .composer textarea{display:block;box-sizing:border-box;min-height:0;max-height:none;overflow-y:auto}
+.codex-app .composer textarea:focus,.codex-app .composer textarea:focus-visible{outline:none;box-shadow:none}
+.codex-app .composer textarea,.codex-app .send-controls>button{-webkit-tap-highlight-color:transparent}
+.codex-app .send-controls>button{display:grid;place-items:center;width:36px;height:36px;padding:0;flex-shrink:0}
+.send-controls>button>svg{display:block;width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.send-controls>#interrupt>svg rect{fill:currentColor;stroke:none}
+.codex-app .send-controls>button:focus-visible{outline:2px solid var(--muted);outline-offset:2px}
+.composer-controls{padding-top:3px}
+.composer-image-tray{max-height:100px;overflow-y:auto;overscroll-behavior-y:contain}
+.composer-wrap{padding-top:0}
+@media(max-width:760px){
+ .codex-app .composer{padding:6px 8px}
+ .composer-auxiliary .composer-queue-item{flex-direction:row;align-items:center;flex-wrap:wrap}
+ .composer-auxiliary .composer-queue-content{flex:1 1 120px}
+ .composer-auxiliary .composer-queue-actions{width:auto;margin-left:auto;justify-content:flex-end;flex-shrink:0}
+ .codex-app .composer-queue-actions button{padding:5px;min-height:28px}
+}

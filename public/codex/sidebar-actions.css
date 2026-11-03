@@ -1,0 +1,25 @@
+/* Inline controls share the row without nesting interactive elements. */
+.codex-app .project>summary{min-width:0;min-height:30px;padding:0 3px 0 6px;border-radius:9px;gap:6px}
+.project>summary::-webkit-details-marker{display:none}
+.project>summary .project-chevron{width:17px;height:20px;flex:0 0 17px;transform:none!important;transition:none}
+.project>summary .project-chevron svg{width:17px;height:17px;stroke-width:1.45}
+.project>summary>.project-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar-project-actions,.sidebar-thread-actions{display:flex;align-items:center;gap:1px;flex:0 0 auto}
+.codex-app .sidebar-row-action{display:grid;place-items:center;flex:0 0 26px;width:26px;min-width:26px;height:26px;min-height:26px;padding:4px;background:transparent;color:var(--muted);border-radius:6px;line-height:1}
+.codex-app .sidebar-row-action:hover{background:var(--border);color:var(--fg)}
+.sidebar-row-action svg{display:block;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.45;stroke-linecap:round;stroke-linejoin:round}
+.sidebar-row-action svg circle{fill:currentColor;stroke:none}
+.sidebar-row-action[aria-pressed=true]{color:var(--fg);background:var(--border)}
+.sidebar-row-action[aria-pressed=true] svg{fill:color-mix(in srgb,currentColor 15%,transparent)}
+.codex-app .sidebar-project-actions>.sidebar-project-notification{flex-basis:26px;width:26px;min-width:26px;height:26px;min-height:26px;padding:4px}
+.codex-app .sidebar-project-notification[aria-checked=true]{color:var(--fg);background:transparent}
+.codex-app .project-body .thread{display:flex;align-items:center;gap:2px;padding:0 3px 0 var(--project-content-indent,20px)!important;min-height:30px;border-radius:8px;overflow:visible}
+.codex-app .project-body .thread[hidden]{display:none}
+.codex-app .thread-open,.codex-app .recent-thread-open{display:flex;align-items:center;gap:7px;flex:1;min-width:0;min-height:30px;margin:0;padding:0;background:transparent;color:inherit;text-align:left;border-radius:6px;font:inherit}
+.thread-open>.thread-name{display:block;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.thread.pinned>.thread-open>.thread-name::before{content:none}
+.project-body .thread>.thread-open>.thread-activity{left:2px;flex:none}
+.codex-app .recent-thread-list .recent-thread{padding:0 3px 0 7px;min-height:34px;gap:2px}
+.codex-app .recent-thread-open{min-height:34px}
+.recent-thread-open>.recent-thread-title{min-width:0}
+.project-body .thread:focus-within,.recent-thread:focus-within{background:var(--border)}

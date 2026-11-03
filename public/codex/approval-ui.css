@@ -1,0 +1,9 @@
+.requests .permission-choice{display:flex;align-items:flex-start;gap:8px;margin:8px 0;font-size:13px;overflow-wrap:anywhere}
+.requests .permission-choice input{width:16px;min-width:16px;height:16px;margin:2px 0 0;accent-color:var(--fg)}
+.requests .elicitation-field{display:grid;gap:5px;margin:12px 0;font-size:13px}
+.requests .elicitation-field small{color:var(--muted);line-height:1.4}
+.requests .elicitation-field input[type=checkbox]{width:18px;height:18px;justify-self:start}
+.requests .approval-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.requests .approval-actions button{margin:0;transition:background .16s,opacity .16s,transform .16s}
+.requests .approval-actions button:active{transform:scale(.97)}
+.requests .card a{overflow-wrap:anywhere}

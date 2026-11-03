@@ -1,0 +1,21 @@
+.composer-queue{display:grid;gap:6px;max-height:min(280px,34dvh);overflow:auto;margin-bottom:8px;padding:8px;border:1px solid var(--border);border-radius:14px;background:var(--page)}
+.composer-queue[hidden],.composer-image-tray[hidden]{display:none}
+.composer-queue-header{display:flex;align-items:center;gap:8px;padding:1px 4px 5px;color:var(--muted);font-size:12px}
+.composer-queue-header strong{color:var(--fg);font-weight:600;white-space:nowrap}.composer-queue-header span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.composer-queue-header button{margin-left:auto}
+.composer-queue-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.composer-queue-content{display:flex;align-items:center;gap:9px;min-width:0;flex:1;color:var(--fg);font-size:13px}.composer-queue-content>span:first-child{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere}.composer-queue-content small{color:var(--muted);white-space:nowrap}
+.composer-queue-media{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;color:var(--muted);font-size:11px}.composer-queue-media img{width:30px;height:30px;object-fit:cover;border-radius:5px}
+.composer-queue-actions{display:flex;flex-wrap:wrap;gap:3px;justify-content:flex-end}.codex-app .composer-queue-actions button,.codex-app .composer-queue-header button{min-height:0;padding:4px 6px;border:0;border-radius:6px;background:transparent;color:var(--muted);font-size:11px;white-space:nowrap}.codex-app .composer-queue-actions button:hover,.codex-app .composer-queue-header button:hover{background:var(--border);color:var(--fg)}
+.composer-image-tray{display:flex;flex-wrap:wrap;gap:9px;padding:0 7px 2px}
+.codex-app .composer:has(>.composer-image-tray:not([hidden])){padding-top:8px}
+.composer-image-preview{position:relative;width:62px;height:62px}
+.codex-app .composer-image-preview>.composer-image-open{display:block;width:100%;height:100%;min-height:0;padding:0;border:0;border-radius:8px;background:transparent;cursor:zoom-in}
+.codex-app .composer-image-preview>.composer-image-open img{display:block;width:100%;height:100%;object-fit:cover;border:1px solid var(--border);border-radius:8px}
+.codex-app .composer-image-preview>.composer-image-remove{position:absolute;top:-5px;right:-5px;display:grid;place-items:center;width:22px;height:22px;min-width:0;min-height:0;padding:0;border:0;border-radius:50%;background:var(--fg);color:var(--page);line-height:1}
+.composer-image-remove svg{display:block;width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+
+@media(max-width:760px){.composer-queue{max-height:min(220px,24dvh)}.composer-queue-item{align-items:flex-start;flex-direction:column}.composer-queue-actions{width:100%;justify-content:flex-start}.composer-queue-header{flex-wrap:wrap}}
+
+.codex-app .composer-queue-media>.image-thumbnail{width:30px;height:30px;min-width:0;min-height:0;padding:0;border:0;border-radius:5px;cursor:zoom-in;flex:0 0 30px}
+.codex-app .composer-queue-media>.image-thumbnail img{display:block;width:30px;height:30px;object-fit:cover}
+.composer-queue-media{flex-wrap:wrap;flex-shrink:1;min-width:30px}

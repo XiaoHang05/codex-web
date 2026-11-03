@@ -1,0 +1,88 @@
+/* Conversation spacing is the distance between adjacent element boxes.
+   Fonts: body / work / meta. Gaps: tight / compact / normal / section.
+   This layer owns vertical rhythm; earlier component styles own decoration. */
+.codex-app .messages{--stack-gap:var(--space-normal,12px)}
+.codex-app :is(.messages,.turn-work-body,.work-list)>*{margin-block:0!important}
+.codex-app :is(.messages,.turn-work-body,.work-list)>*+*{margin-top:var(--stack-gap)!important}
+.codex-app :is(.turn-work-body,.work-list){--stack-gap:var(--space-compact,8px)}
+.codex-app :is(.messages,.turn-work-body)>:is(.work-group,.tool-row,.image-record,.thinking-status,.connection-retry,.compaction-record)+:is(.work-group,.tool-row,.image-record,.thinking-status,.connection-retry,.compaction-record){margin-top:var(--space-compact,8px)!important}
+/* Text on either side of work uses the same standard gap. */
+.codex-app .turn-work-body>.message+*,
+.codex-app .turn-work-body>*+.message{margin-top:var(--space-normal,12px)!important}
+/* A user message starts a new conversational section in either direction. */
+.codex-app :is(.messages,.turn-work-body)>*+.message.user,
+.codex-app :is(.messages,.turn-work-body)>.message.user+*{margin-top:var(--space-section,24px)!important}
+.codex-app .turn-work>summary.reply-processing{margin:0;padding-block:0}
+.codex-app .turn-work>.turn-work-body{margin-top:var(--space-normal,12px)}
+.codex-app .work-group>.work-list{margin-top:var(--space-compact,8px)}
+.codex-app .work-list{max-block-size:calc(var(--work-visible-rows,7) * (var(--work-font-size,13px) + var(--space-tight,4px)) + (var(--work-visible-rows,7) - 1) * var(--space-compact,8px));overflow-y:auto;overscroll-behavior-y:auto;scrollbar-gutter:stable;min-width:0}
+.codex-app .work-list.work-scroll-contained{overscroll-behavior-y:contain}
+
+/* The quiet separator occupies its own full-width row below the turn label. */
+.codex-app .messages .reply-processing{display:flex;flex-wrap:wrap;align-items:center;column-gap:var(--space-compact,8px);row-gap:var(--space-compact,8px);font-size:var(--work-font-size,13px);line-height:calc(1em + var(--space-tight,4px));white-space:normal}
+.codex-app .reply-processing-line{display:block;flex:0 0 100%;width:100%;height:1px}
+.codex-app .turn-work-activities{flex:1;white-space:nowrap}
+.codex-app .turn-work>summary.reply-processing{padding-inline:0}
+.codex-app .turn-work>summary.reply-processing::before{display:none;content:none}
+.codex-app .turn-work-chevron{display:inline-block;flex-shrink:0;font-size:14px;color:inherit;transform:rotate(0deg);transition:transform .2s ease}
+.codex-app .turn-work[open]>summary>.turn-work-chevron{transform:rotate(90deg)}
+@media(prefers-reduced-motion:reduce){.codex-app .turn-work-chevron{transition:none}}
+
+/* Every work title and detail uses the work type tier and the same line gap. */
+.codex-app :is(.work-group,.tool-row,.image-record,.thinking-status,.connection-retry,.compaction-record){font-size:var(--work-font-size,13px);line-height:calc(1em + var(--space-tight,4px))}
+.codex-app :is(.work-group,.tool-row,.image-record,.connection-retry,.compaction-record)>summary,
+.codex-app :is(.web-search-record,.thinking-status){font-size:var(--work-font-size,13px);line-height:calc(1em + var(--space-tight,4px));min-height:0;padding-block:0}
+.codex-app :is(.work-label,.work-live-text){line-height:inherit}
+.codex-app .reasoning-record{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:var(--work-font-size,13px);line-height:calc(1em + var(--space-tight,4px))}
+.codex-app .work-icon{font-size:inherit;height:1em;width:1.35em;flex-basis:1.35em}
+.codex-app .work-icon svg{height:1em;width:1em}
+.codex-app .work-list .tool-row>summary{align-items:center}
+.codex-app .work-list .tool-row>summary>.work-dot{margin-top:0}
+.codex-app :is(.work-group,.tool-row,.image-record)>summary::after{font-size:inherit}
+.codex-app :is(.work-group,.tool-row,.image-record,.connection-retry,.compaction-record)>summary{font-size:var(--work-font-size,13px);line-height:calc(1em + var(--space-tight,4px))}
+.codex-app .messages :is(.tool-body,.image-record-body,.connection-retry-body,.compaction-body){margin-top:var(--space-compact,8px);padding-block:0}
+.codex-app .image-record-body{gap:var(--space-compact,8px)}
+.codex-app .messages :is(.tool-body,.connection-retry-body)>*{margin-block:0}
+.codex-app .messages :is(.tool-body,.connection-retry-body)>*+*{margin-top:var(--space-compact,8px)}
+.codex-app :is(.work-list pre,.tool-body pre,.reasoning-content,.compaction-context-panel>pre){font-size:var(--work-font-size,13px);line-height:calc(1em + var(--space-tight,4px))}
+
+/* Markdown blocks use one shared gap, without doubled/collapsing margins. */
+.codex-app .message{font-size:var(--chat-font-size,14px);line-height:calc(1em + var(--space-tight,4px))}
+.codex-app .message:not(.user){display:flow-root;padding-block:0}
+.codex-app .message:not(.user)>*{margin-block:0}
+.codex-app .message:not(.user)>*+*{margin-top:var(--space-normal,12px)}
+.codex-app .message :is(h1,h2,h3,h4,h5,h6,pre,code){font-size:inherit;line-height:inherit}
+.codex-app .message li+li{margin-top:var(--space-tight,4px)}
+.codex-app .message li>:is(ul,ol){margin-block:var(--space-tight,4px)}
+.codex-app .message li>p{margin-block:0}
+.codex-app .message li>p+p{margin-top:var(--space-normal,12px)}
+.codex-app .message blockquote>*{margin-block:0}
+.codex-app .message blockquote>*+*{margin-top:var(--space-normal,12px)}
+.codex-app .message .message-actions{margin-top:var(--space-compact,8px)}
+.codex-app .message.user.with-images{gap:var(--space-compact,8px)}
+.codex-app .user-image-attachments{gap:var(--space-compact,8px)}
+.codex-app :is(.reply-time,.user-actions,.compaction-context-header,.session-compaction time,.message .answered-options,.message .answered-option small){font-size:var(--meta-font-size,11px);line-height:calc(1em + var(--space-tight,4px))}
+.codex-app .message .answered-options{margin-top:var(--space-compact,8px)}
+.codex-app .messages .artifact-link{font-size:var(--meta-font-size,11px);line-height:calc(1em + var(--space-tight,4px))}
+.codex-app .composer textarea{font-size:var(--chat-font-size,14px);line-height:calc(1em + var(--space-tight,4px))}
+
+/* Reconnection and work headings share a single layout, including live titles.
+   Vertical spacing belongs outside the title box, never hidden in its padding. */
+.codex-app :is(.work-group,.single-work-record,.connection-retry)>.work-title{display:flex;align-items:center;gap:8px;margin:0;padding:0;min-height:0;max-width:100%;width:fit-content;box-sizing:border-box;font-size:var(--work-font-size,13px);line-height:calc(1em + var(--space-tight,4px));font-weight:inherit}
+.codex-app .work-title>:is(.work-label,.work-live-text){font:inherit;line-height:inherit;align-self:center}
+.codex-app .work-title>.work-icon{align-self:center;margin-block:0}
+/* Reconnection uses the same title boxes and icon metrics as work records. */
+.codex-app .connection-retry>summary{gap:8px;align-items:center;transition:color .18s ease}
+.codex-app .connection-retry>summary::after{font-size:inherit}
+.codex-app .connection-retry>summary>.work-label{min-width:0;line-height:inherit}
+
+/* Detail headings keep one line in both disclosure states. */
+.codex-app .tool-row>summary>.work-label{min-width:0;flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.codex-app .turn-work-chevron{opacity:1;transition:opacity .18s ease,transform 220ms cubic-bezier(.2,.7,.2,1)}
+.codex-app .turn-work:is([open],:has(>summary:hover),:has(>summary:focus-visible))>summary>.turn-work-chevron{opacity:1}
+.codex-app .turn-work[data-closing=true]>summary>.turn-work-chevron{transform:rotate(0deg)}
+@media(prefers-reduced-motion:reduce){.codex-app details>summary::after,.codex-app .session-context>summary::before,.codex-app .turn-work-chevron{transition:none}}
+
+.codex-app .turn-work>summary.reply-processing{column-gap:0}
+.codex-app .turn-work-chevron{margin-left:.5em}

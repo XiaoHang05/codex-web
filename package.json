@@ -1,0 +1,22 @@
+{
+  "name": "codex-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted Codex Web client with an optional desktop adapter",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node src/standalone.js",
+    "test": "node --test test/*.test.js",
+    "check": "node scripts/check.mjs"
+  },
+  "dependencies": {
+    "express": "5.1.0",
+    "ws": "8.22.0",
+    "mammoth": "1.13.0",
+    "@simplewebauthn/server": "13.3.2",
+    "@simplewebauthn/browser": "13.2.2"
+  }
+}

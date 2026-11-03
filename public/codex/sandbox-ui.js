@@ -1,0 +1,9 @@
+export function sandboxSettings({api,currentProfile,refresh,notice}){
+ const box=document.createElement('div');box.className='sandbox-settings';const title=document.createElement('h3');title.textContent='Windows 沙箱';const note=document.createElement('p');note.className='muted';note.textContent='为此网页实例配置本机沙箱。管理员模式推荐使用；无管理员权限时可选普通模式。配置完成后只重启此网页内核。';
+ const mode=document.createElement('select');mode.setAttribute('aria-label','Windows 沙箱模式');mode.append(new Option('管理员模式（推荐，可能请求 Windows 提权）','elevated'),new Option('普通模式（无需提权）','unelevated'));
+ const button=document.createElement('button');button.type='button';button.textContent='配置沙箱并重启网页实例';const state=document.createElement('p');state.className='settings-note';state.setAttribute('aria-live','polite');box.append(title,note,mode,button,state);document.querySelector('[data-panel="runtime"]').append(box);
+ let busy=false,lastRuntime;
+ const controls=()=>{button.disabled=busy||!!lastRuntime?.sandboxSetupPending||!!lastRuntime?.active||!!lastRuntime?.approvals;mode.disabled=busy;};
+ button.onclick=async()=>{const id=currentProfile(),selectedMode=mode.value;if(busy)return;if(!confirm('为当前网页配置初始化 Windows 沙箱，并在成功后重启该网页内核？请先完成任务和账号登录。'+(selectedMode==='elevated'?'\nWindows 可能弹出管理员授权窗口，需要你本人确认。':'')))return;busy=true;button.disabled=true;mode.disabled=true;state.textContent='正在初始化沙箱，请完成出现的 Windows 系统窗口…';try{await api(`/codex-api/v1/windows-sandbox/${id}/setup`,{mode:selectedMode,confirmation:'configure-and-restart-web-instance'});state.textContent='沙箱已就绪，网页内核已重新启动。';if(id===currentProfile())await refresh();}catch(error){state.textContent=error.message;notice(error.message);}finally{busy=false;controls();}};
+ return {update(runtime,sandbox){lastRuntime=runtime;controls();const pending=runtime?.sandboxSetupPending;state.textContent=pending?'此实例正在初始化沙箱。':runtime?.sandboxNeedsRestart?'沙箱配置已完成，请在主页重启此网页实例。':sandbox?.status==='ready'?'当前实例沙箱已就绪。':'当前实例沙箱尚未就绪。';}};
+}

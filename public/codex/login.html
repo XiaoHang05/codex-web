@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f7f8f5">
+<title>登录 · Codex Web</title>
+<style>
+:root{font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;color:#24342e;background:#f7f8f5;font-size:15px;line-height:1.6;--green:#32634c;--line:#e2e7df;--subtle:#66726b}*{box-sizing:border-box}body{margin:0;min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:40px 20px}main{width:100%;max-width:400px}.brand{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:650;letter-spacing:-.5px;margin:0 0 28px}.brand-mark{display:grid;place-items:center;width:39px;height:39px;border:1px solid #cbd8cd;border-radius:12px;background:#eaf0e6;color:var(--green);font-size:24px}.login-card{border:1px solid var(--line);border-radius:14px;background:white;padding:30px;box-shadow:0 2px 3px #24342e03}h1{font-size:23px;font-weight:600;margin:0 0 24px;letter-spacing:-.4px}label{display:block;font-size:13px;font-weight:500;margin:0 0 7px}input,button{font:inherit;box-sizing:border-box;width:100%;border-radius:8px;min-height:44px;padding:10px 12px}input{border:1px solid #d6ded3;background:#fcfdfb;color:inherit;font-size:14px}input::placeholder{color:#808b82}button{cursor:pointer;border:1px solid transparent;background:var(--green);color:white;font-size:13px;font-weight:500;margin-top:14px;line-height:1.5}button:hover:not(:disabled){filter:brightness(.96)}button.secondary{background:#f1f4ee;color:#445a4b;border-color:#e8ece4}input:focus-visible,button:focus-visible{outline:2px solid var(--green);outline-offset:3px}.login-method{border-top:1px solid var(--line);padding-top:22px;margin-top:24px}#passkey{margin:0}#error{color:#a2423b;background:#fff4f1;border:1px solid #f0dcd6;border-radius:8px;padding:10px 12px;font-size:13px;overflow-wrap:anywhere;margin:20px 0 0}#error:empty{display:none}@media(max-width:420px){body{padding:28px 20px}.brand{margin-bottom:22px}.login-card{padding:24px}}@media(max-height:680px){body{align-items:start;padding-top:28px}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<link rel="icon" type="image/png" sizes="32x32" href="/codex/icons/codex-v1-32.png"><link rel="apple-touch-icon" sizes="180x180" href="/codex/icons/codex-v1-180.png"><link rel="manifest" href="/codex/icons/codex-v1.webmanifest"><link rel="stylesheet" href="/codex/icons/site-branding-v1.css"></head>
+<body>
+<main>
+<div class="brand"><span class="brand-mark site-brand-mark" aria-hidden="true"><img class="site-logo" src="/codex/icons/codex-v1-180.png" width="39" height="39" alt=""></span><span>Codex Web</span></div>
+<section class="login-card" aria-labelledby="login-heading">
+<h1 id="login-heading">登录</h1>
+<button type="button" id="passkey">通行密钥登录</button>
+<form class="login-method" id="one-time-login"><label for="one-time-key">一次性密钥</label><input id="one-time-key" type="password" autocomplete="off" spellcheck="false" inputmode="numeric" pattern="[0-9]{8}" minlength="8" maxlength="8" placeholder="8 位数字" required><button class="secondary" type="submit">一次性密钥登录</button></form>
+<form class="login-method" id="login"><label for="password">访问密码</label><input id="password" type="password" autocomplete="current-password" required><button class="secondary" type="submit">密码登录</button></form>
+<p id="error" role="status" aria-live="polite"></p>
+</section>
+</main>
+<script src="/codex/vendor/webauthn.js"></script><script>
+function loginDestination(){
+  const next=new URLSearchParams(location.search).get('next');
+  if(!next||next.length>8192||!next.startsWith('/')||next.startsWith('//')||/[\\\u0000-\u001f\u007f]/.test(next))return '/';
+  try{const url=new URL(next,location.origin);if(url.origin!==location.origin||/^\/(?:login(?:\/|$)|api(?:\/|$)|portal\/api(?:\/|$))/i.test(url.pathname))return '/';return url.pathname+url.search+url.hash;}catch{return '/';}
+}
+const returnTo=loginDestination();
+async function request(url,body){const r=await fetch('/codex-api/v1/auth/'+url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const x=await r.json();if(!r.ok)throw Error(x.error||'登录失败');return x;}
+document.getElementById('login').onsubmit=async e=>{e.preventDefault();try{await request('login',{password:document.getElementById('password').value});location.href=returnTo;}catch(x){document.getElementById('error').textContent=x.message;}};
+document.getElementById('passkey').onclick=async()=>{try{const options=await request('passkey/options',{});const response=await SimpleWebAuthnBrowser.startAuthentication({optionsJSON:options});await request('passkey/verify',{response});location.href=returnTo;}catch(x){document.getElementById('error').textContent=x.message;}};
+document.getElementById('one-time-login').onsubmit=async e=>{e.preventDefault();const field=document.getElementById('one-time-key');const oneTimeKey=field.value.trim();field.value='';try{await request('login',{oneTimeKey});location.href=returnTo;}catch(x){document.getElementById('error').textContent=x.message;}};
+fetch('/codex-api/v1/auth/status').then(r=>r.json()).then(info=>{if(info.authenticated)location.href=returnTo;}).catch(()=>{document.getElementById('error').textContent='无法读取登录状态，请刷新重试';});
+</script></body></html>

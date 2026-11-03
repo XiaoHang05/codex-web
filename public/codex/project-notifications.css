@@ -1,0 +1,12 @@
+.notification-project-panel{width:100%;min-width:0;margin-top:20px}
+.notification-project-panel .muted{font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+.notification-project-default{display:flex;align-items:center;gap:10px;font-size:14px}
+.notification-project-panel input[type=checkbox]{width:18px!important;height:18px;min-height:0;flex:none;accent-color:#188452;margin:0}
+.notification-project-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.notification-project-actions button{font-size:12px;padding:8px 12px;min-height:36px}
+.notification-project-panel input[type=search]{box-sizing:border-box;width:100%;margin-bottom:10px}
+.notification-project-list{max-height:360px;overflow:auto;scrollbar-width:thin;overscroll-behavior:contain}
+.notification-project-row{display:flex;gap:16px;align-items:center;justify-content:space-between;padding:12px 2px;border-bottom:1px solid var(--border,#8883);cursor:pointer}
+.notification-project-row>span{display:grid;gap:4px;min-width:0}
+.notification-project-row strong{font-size:13px;font-weight:500}
+.notification-project-row small{font-size:11px;opacity:.65;overflow-wrap:anywhere;line-height:1.5}

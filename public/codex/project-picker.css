@@ -1,0 +1,20 @@
+.new-chat-actions{display:flex;align-items:center;gap:3px}.new-chat-actions .new-chat{flex:1}.new-chat-actions kbd{display:none}
+.new-chat-actions svg,.project-directory-button svg,.project-info-button svg,.project-picker-item svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.codex-app .project-info-button{display:grid;place-items:center;flex:0 0 24px;width:24px;height:24px;padding:3px;border:0;background:transparent;color:var(--muted);border-radius:5px;opacity:0;transition:opacity .15s,background .15s}
+.project>summary:hover .project-info-button,.project>summary:focus-within .project-info-button{opacity:1}.codex-app .project-info-button:hover{background:var(--border);color:var(--fg)}
+.project>summary>span:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.project>summary>.project-info-button{margin-inline-start:auto}
+.project>summary>.project-info-button+.project-count{margin-left:0;flex-shrink:0}
+.codex-app .project-directory-button{display:inline-flex;align-items:center;gap:4px;padding:0 3px;background:transparent;color:var(--muted);font-size:11px;max-width:180px;min-height:20px;vertical-align:middle}.project-directory-button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.project-directory-button svg{width:13px;height:13px}.codex-app .project-directory-button:hover{background:var(--border);color:var(--fg)}
+.project-picker{display:grid;gap:12px;min-width:0}.project-picker p{margin:0;font-size:13px}.project-full-path{display:block;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;background:var(--surface);border-radius:8px;user-select:text}
+.project-path-form{display:flex;align-items:center;gap:8px}.project-path-form input{flex:1;width:0;min-width:0;font-size:14px}.project-path-form button{flex-shrink:0}
+.project-instance-label{display:grid;gap:6px;font-size:13px}.project-instance-label select{width:100%;min-width:0}.project-instance-status{line-height:1.5;overflow-wrap:anywhere}
+.project-picker-tabs{display:flex;gap:6px}.codex-app .project-picker-tabs button{background:transparent;color:var(--muted);font-size:13px;padding:7px 10px}.codex-app .project-picker-tabs button[aria-pressed=true]{background:var(--border);color:var(--fg)}
+.project-folder-search{box-sizing:border-box;width:100%;min-width:0;font-size:14px}
+.project-picker-status{color:var(--muted);overflow-wrap:anywhere}.project-picker-status:empty{display:none}.project-picker-list{max-height:38dvh;overflow:auto;overscroll-behavior:contain;min-width:0}
+.codex-app .project-picker-item{display:flex;align-items:center;gap:10px;background:transparent;color:var(--fg);width:100%;text-align:left;padding:9px;border-radius:8px}.project-picker-item:hover{background:var(--border)}.project-picker-item>span:last-child{display:grid;gap:3px;min-width:0}.project-picker-item strong{font-size:14px;font-weight:500;overflow-wrap:anywhere}.project-picker-item small{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.project-picker-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}.project-picker-actions button{font-size:13px}.project-picker-actions button:disabled{opacity:.5}
+@media(hover:none){.codex-app .project-info-button{opacity:1}}
+@media(max-width:760px){.codex-app .project-directory-button{max-width:130px}.project-picker-list{max-height:32dvh}}
+.codex-app .thread-meta{align-items:center;line-height:20px}
+.codex-app .thread-meta .project-directory-button{font-size:inherit;line-height:inherit}

@@ -1,0 +1,15 @@
+.mobile-topbar{display:contents}
+.codex-app .mobile-menu-capsule{display:none}
+@media(max-width:760px){
+  .mobile-topbar{display:block;flex-shrink:0;position:relative;z-index:6;background:var(--page);transform:translateY(0);margin-bottom:0;transition:transform .22s ease,margin-bottom .22s ease}
+  /* Raise the owning stacking context above the fixed composer (9), while
+     keeping sidebar (20) and modal dialogs (30+) above the menu. */
+  .mobile-topbar:has(.thread-menu[open]){z-index:18}
+  .mobile-topbar.is-retracted{transform:translateY(-100%);margin-bottom:calc(-1 * var(--mobile-topbar-height));pointer-events:none}
+  .codex-app .mobile-menu-capsule{position:fixed;top:max(8px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));z-index:7;display:inline-flex;align-items:center;justify-content:center;gap:6px;height:44px;min-width:44px;padding:0 12px;border-radius:999px;border:1px solid #ffffff80;background:rgba(255,255,255,.72);background:color-mix(in srgb,var(--page) 72%,transparent);color:var(--fg);box-shadow:0 3px 15px #00000012;backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);font-size:12px;line-height:1;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(5px) scale(.72);transform-origin:20px 50%;transition:opacity .2s ease,transform .24s cubic-bezier(.2,.7,.2,1),visibility .24s}
+  .codex-app .mobile-menu-capsule.is-visible{opacity:1;visibility:visible;pointer-events:auto;transform:translateY(0) scale(1)}
+  .mobile-menu-capsule svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
+  .embedded-chat .mobile-menu-capsule{display:none}
+}
+@media(max-width:760px) and (prefers-color-scheme:dark){.codex-app .mobile-menu-capsule{border-color:#ffffff24;background:rgba(33,33,33,.72);background:color-mix(in srgb,var(--page) 72%,transparent);box-shadow:0 3px 16px #0003}}
+@media(prefers-reduced-motion:reduce){.mobile-topbar,.codex-app .mobile-menu-capsule{transition:none}}

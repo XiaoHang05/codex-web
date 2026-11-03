@@ -1,0 +1,9 @@
+.project-body .thread{position:relative}
+.project-body .thread .thread-activity{display:inline-flex;position:absolute;left:5px;top:50%;transform:translateY(-50%);align-items:center;justify-content:center;width:15px;height:15px;overflow:visible}
+.project-body .thread .thread-activity[hidden]{display:none}
+.thread-spinner{display:block;width:13px;height:13px;box-sizing:border-box;border:2px solid var(--muted);border-top-color:var(--fg);border-radius:50%;animation:thread-spin .85s linear infinite}
+.thread-feedback{position:absolute;display:block;width:8px;height:8px;left:5px;top:5px;border-radius:50%;box-shadow:0 0 0 2px var(--sidebar)}
+.thread-activity:has(.thread-spinner) .thread-feedback{left:auto;top:auto;right:-1px;bottom:-1px}
+.thread-feedback.new-reply{background:#39a56b}.thread-feedback.attention{background:#d6a22e}
+@keyframes thread-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.thread-spinner{animation:none}}

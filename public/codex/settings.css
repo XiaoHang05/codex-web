@@ -1,0 +1,44 @@
+.codex-app .modal .settings-card{width:min(760px,100%);max-width:100%;max-height:88dvh;overflow:hidden;padding:0;display:flex;flex-direction:column;border-radius:22px;box-shadow:0 20px 90px #0003;animation:settings-enter .22s ease-out}
+.settings-header{padding:20px 24px 12px;flex-shrink:0}
+.settings-tabs{display:flex;gap:5px;padding:0 20px 12px;margin:0;overflow-x:auto;flex-shrink:0;border-bottom:1px solid var(--border)}
+.codex-app .settings-tabs button{background:transparent;color:var(--muted);padding:9px 11px;white-space:nowrap;font-size:12px;transition:background .18s,color .18s}
+.codex-app .settings-tabs button.active{background:var(--surface);color:var(--fg)}
+.settings-scroll{padding:18px 24px 24px;overflow:auto;min-height:0;overscroll-behavior:contain;scrollbar-gutter:stable}
+[data-panel][hidden]{display:none}
+.settings-fields label[hidden]{display:none}
+[data-panel]:not([hidden]){animation:panel-enter .18s ease-out}
+.quota-heading{display:flex;align-items:center;justify-content:space-between;margin:24px 0 10px;gap:10px}
+.quota-heading h3{margin:0}.quota-heading button{font-size:12px}
+.quota-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.profile-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.profile-actions button{font-size:12px}.profile-removed-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0}.profile-removed-row span{overflow-wrap:anywhere}.removed-profiles h4{font-size:13px;margin:14px 0}
+.model-controls{flex:1;overflow-x:auto;white-space:nowrap;scrollbar-width:none;gap:3px}.model-controls::-webkit-scrollbar{display:none}.model-controls select{flex-shrink:0}.send-controls{flex-shrink:0}.daily-usage{margin:12px 0;color:var(--muted)}.daily-usage summary{cursor:pointer;padding:10px 0}.daily-usage[open]{animation:panel-enter .18s ease-out}#account-usage{margin:12px 0 20px}
+.quota-card,.settings-note{border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin:12px 0}
+.settings-stat{display:flex;justify-content:space-between;gap:18px;padding:9px 0;font-size:12px;align-items:flex-start;border-bottom:1px solid var(--border)}
+.settings-stat:last-child{border-bottom:0}.settings-stat span{color:var(--muted);flex-shrink:0}.settings-stat strong{font-weight:500;text-align:right;overflow-wrap:anywhere}
+.pixel-input{display:flex;align-items:center;gap:10px;max-width:180px;margin-top:7px}.pixel-input input{margin:0!important;text-align:right}.pixel-input>span{color:var(--muted);font-size:12px}.width-setting>span{display:flex;align-items:center;gap:12px}.width-setting .pixel-input{max-width:125px;margin:0}
+.appearance-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:14px 18px;align-items:start}
+.appearance-fields:is([data-appearance="spacing"],[data-appearance="widths"]){grid-template-columns:repeat(2,minmax(0,1fr))}
+.appearance-fields[data-appearance="work"]{grid-template-columns:repeat(3,minmax(0,1fr))}
+.appearance-fields>label,.appearance-fields>.width-setting{min-width:0;margin:0;font-size:12px;color:var(--muted)}
+.appearance-fields .pixel-input{max-width:none;margin-top:7px;gap:6px}
+.appearance-fields .pixel-input input{min-width:0;width:0;flex:1}
+.appearance-fields .pixel-input>span{flex-shrink:0}
+.appearance-fields .width-setting{display:block}
+.appearance-fields .width-setting>span{display:block}
+.appearance-fields label>small{display:block;margin-top:6px;font-size:11px;line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
+.appearance-heading{margin-top:22px}
+.appearance-explanation{font-size:12px;line-height:1.6;margin:12px 0 0}
+.codex-app .appearance-reset{margin:10px 0 22px;font-size:12px;padding:6px 9px}
+.codex-app .appearance-fields .width-setting>button{margin-top:7px;padding:4px 7px;font-size:11px}
+@media(max-width:480px){.appearance-fields,.appearance-fields[data-appearance="work"]{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}
+.quota-card progress{display:block;width:100%;height:7px;margin:5px 0 8px;border:0;border-radius:10px;overflow:hidden;background:var(--surface);accent-color:#73aa94}
+.quota-card progress::-webkit-progress-bar{background:var(--surface)}.quota-card progress::-webkit-progress-value{background:#73aa94;border-radius:10px}
+.codex-app *{scrollbar-width:thin;scrollbar-color:#aaa8 transparent}
+.codex-app ::-webkit-scrollbar{width:7px;height:7px}.codex-app ::-webkit-scrollbar-track{background:transparent}.codex-app ::-webkit-scrollbar-thumb{background:#aaa8;border-radius:10px;border:2px solid transparent;background-clip:padding-box}.codex-app ::-webkit-scrollbar-thumb:hover{background-color:#888b}
+.codex-app button{transition:background .15s,color .15s,opacity .15s,transform .15s}.codex-app button:active:not(:disabled){transform:scale(.97)}
+.sidebar-scrim{animation:backdrop-enter .2s ease-out}.work-group[open]>.work-list{animation:panel-enter .2s ease-out}.tool-row[open]>pre{animation:panel-enter .18s ease-out}
+@keyframes settings-enter{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes panel-enter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@keyframes backdrop-enter{from{opacity:0}to{opacity:1}}
+@media(max-width:760px){.codex-app .modal .settings-card{max-height:92dvh;border-radius:20px}.settings-header{padding:17px 17px 12px}.settings-tabs{padding:0 11px 10px;gap:0}.codex-app .settings-tabs button{font-size:11px;padding:9px 8px}.settings-scroll{padding:15px 17px 20px}.settings-stat{gap:10px}.quota-card,.settings-note{padding:10px 12px}}
+@media(prefers-reduced-motion:reduce){.codex-app *,.codex-app *::before,.codex-app *::after{animation:none!important;transition:none!important}}

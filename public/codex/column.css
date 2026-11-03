@@ -1,0 +1,13 @@
+.app-main{position:relative}.codex-app .messages{padding-inline:max(24px,calc((100% - var(--chat-column-width,780px))/2))}.composer-wrap{max-width:calc(var(--chat-column-width,780px) + 48px)}
+.codex-app .message,.codex-app .message.user{line-height:calc(1em + var(--space-tight,8px))}
+.codex-app .message:not(.user){margin-block:var(--space-normal,8px)}.message p{margin-block:var(--space-normal,6px)}.message p:last-of-type{margin-bottom:var(--space-normal,6px)}.work-group{margin-block:var(--space-normal,8px)}
+.codex-app .message:not(.user){padding-block:0}.message>:first-child{margin-top:0}.message>:last-child{margin-bottom:0}.message p:first-child{margin-top:0}.message p:last-child,.message p:last-of-type{margin-bottom:0}
+.column-handles{position:absolute;left:50%;top:78px;bottom:166px;width:min(calc(100% - 48px),var(--chat-column-width,780px));transform:translateX(-50%);pointer-events:none;z-index:4}
+.column-handle{position:absolute;top:0;bottom:0;width:14px;pointer-events:auto;cursor:col-resize;touch-action:none;outline:none}.column-handle[data-side=left]{left:-14px}.column-handle[data-side=right]{right:-14px}
+.column-handle::after{content:'';position:absolute;top:30%;height:40%;width:2px;left:6px;border-radius:3px;background:var(--muted);opacity:0;transition:opacity .18s}.column-handle:hover::after,.column-handle:focus-visible::after,.resizing-column .column-handle::after{opacity:.3}
+.resizing-column{cursor:col-resize;user-select:none}.resizing-column .message{pointer-events:none}.width-setting{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;margin:18px 0}.width-setting button{font-size:12px}
+@media(max-width:760px){.column-handles{display:none}.codex-app .messages{padding-inline:16px}.composer-wrap{max-width:none}}
+@media(prefers-reduced-motion:reduce){.column-handle::after{transition:none}}
+
+.codex-app .message.user{max-width:min(85%,var(--user-message-width,560px));margin-bottom:var(--space-section,24px)}
+.codex-app .message.user + .message:not(.user),.codex-app .message.user + .work-group,.codex-app .message.user + .image-record,.codex-app .message.user + .thinking-status{margin-top:0}

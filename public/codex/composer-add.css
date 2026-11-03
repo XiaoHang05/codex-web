@@ -1,0 +1,23 @@
+.codex-app .composer-add-button{display:inline-grid;place-items:center;flex:0 0 28px;width:28px;height:28px;min-height:0;padding:4px;border:0;border-radius:50%;background:transparent;color:var(--muted)}
+.composer-add-button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}.codex-app .composer-add-button:hover,.codex-app .composer-add-button[aria-expanded=true]{background:var(--surface);color:var(--fg)}
+.composer-add-button:focus-visible{outline:1px solid var(--muted);outline-offset:2px}
+.composer-controls{flex-wrap:nowrap}
+.composer-controls>.model-controls{flex:1;min-width:0;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:none;padding-block:2px}
+.composer-controls>.model-controls::-webkit-scrollbar{display:none}
+.composer-controls>.model-controls>*{flex-shrink:0}
+.composer-controls>.send-controls{flex-shrink:0;flex-wrap:nowrap}
+.composer-add-menu{position:fixed;z-index:70;width:min(520px,calc(100vw - 16px));box-sizing:border-box;display:flex;flex-direction:column;overflow:hidden;padding:6px}
+.composer-add-search{display:flex;align-items:center;gap:8px;padding:4px 6px 8px;flex-shrink:0;border-bottom:1px solid var(--border)}
+.codex-app .composer-add-search input{min-width:0;width:100%;border:0;background:transparent;color:var(--fg);font-size:13px;padding:6px 2px;box-shadow:none;outline:none}
+.codex-app .composer-add-back{min-height:0;padding:5px 6px;background:transparent;color:var(--muted);font-size:12px;flex-shrink:0}
+.composer-add-list{overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;min-height:0;padding-top:4px}
+.codex-app .composer-add-option{display:flex;align-items:center;gap:10px;padding:9px 10px;min-height:38px}
+.composer-add-option>.work-icon{display:grid;place-items:center;flex:0 0 20px;width:20px;height:20px;margin:0;align-self:center}
+.composer-add-option>.work-icon svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.composer-add-option>span:last-child{display:flex;align-items:baseline;gap:9px;min-width:0;flex:1}
+.composer-add-option strong{flex:0 0 auto;max-width:55%;min-width:0;font-size:13px;font-weight:400}
+.composer-add-option small{min-width:0;flex:1;font-size:12px}
+.codex-app .composer-add-option:disabled{cursor:default;opacity:.45}.codex-app .composer-add-option:disabled:hover{background:transparent!important}
+.composer-add-option:focus-visible{outline:1px solid var(--muted);outline-offset:-2px;background:var(--surface)}
+.composer-add-empty{padding:12px;color:var(--muted);font-size:13px}
+@media(max-width:760px){.codex-app .composer-add-option{padding:9px 7px;gap:8px}.composer-add-option>span:last-child{gap:7px}.composer-add-menu{border-radius:13px}.codex-app .composer-add-button{width:26px;height:26px;flex-basis:26px}}

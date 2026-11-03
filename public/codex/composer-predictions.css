@@ -1,0 +1,6 @@
+.composer-predictions{display:flex;align-items:center;gap:8px;margin:0 0 7px;padding:0 4px;color:var(--muted);font-size:11px;line-height:1.5}
+.composer-predictions[hidden],.composer-predictions button[hidden]{display:none}
+.composer-predictions>span{flex:1;overflow-wrap:anywhere}
+.codex-app .composer-prediction-accept{flex-shrink:0;background:transparent;color:var(--muted);border:1px solid var(--border);padding:4px 8px;font-size:11px}
+.composer-prediction-setting{display:flex;align-items:center;gap:8px;margin-top:18px}
+.composer-prediction-setting input{width:auto}
