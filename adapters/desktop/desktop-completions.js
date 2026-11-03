@@ -1,12 +1,31 @@
 import fs from 'node:fs';import path from 'node:path';
-import {dataRoot,readJson,writeJson} from '../../src/storage.js';
+import {randomUUID} from 'node:crypto';
+import {dataRoot,readJson} from '../../src/storage.js';
 import {approvalSummary} from '../../src/notification-format.js';
 // Incremental journal reads cover short turns and app-tool inline questions.
 export class DesktopCompletions {
   constructor(history,notifications,{directory=dataRoot,clock=Date.now}={}){
     this.history=history;this.notifications=notifications;this.clock=clock;
     this.file=path.join(directory,'desktop-notification-cursors.json');
-    this.state=readJson(this.file,{initialized:false,since:clock(),files:{}});this.error=null;this.lastSuccess=null;
+    this.error=null;this.lastSuccess=null;this.recoveredAt=null;
+    const fresh=()=>({initialized:false,since:clock(),asyncQuestionsSince:clock(),files:{}});
+    try{
+      this.state=readJson(this.file,fresh());
+      const value=this.state;
+      if(!value||typeof value.initialized!=='boolean'||!Number.isFinite(value.since)||!value.files||typeof value.files!=='object'||Array.isArray(value.files)||Object.values(value.files).some(cursor=>!cursor||typeof cursor.file!=='string'||!Number.isSafeInteger(cursor.offset)||cursor.offset<0||!Number.isFinite(cursor.since)))throw new SyntaxError('Invalid notification cursor structure');
+    }catch(error){
+      if(!(error instanceof SyntaxError))throw error;
+      // This derived read cursor is recoverable; account/configuration stores
+      // are not. Preserve the original bytes and start at existing log EOFs.
+      const backup=this.file+'.corrupt-'+randomUUID();fs.copyFileSync(this.file,backup,fs.constants.COPYFILE_EXCL);
+      this.state=fresh();this.recoveredAt=clock();this.state.recoveredAt=this.recoveredAt;this.save();
+    }
+  }
+  save(){
+    fs.mkdirSync(path.dirname(this.file),{recursive:true});const temporary=this.file+'.'+randomUUID()+'.tmp';let descriptor;
+    try{
+      descriptor=fs.openSync(temporary,'wx',0o600);fs.writeFileSync(descriptor,JSON.stringify(this.state,null,2)+'\n');fs.fsyncSync(descriptor);fs.closeSync(descriptor);descriptor=undefined;fs.renameSync(temporary,this.file);
+    }finally{if(descriptor!==undefined)fs.closeSync(descriptor);if(fs.existsSync(temporary))fs.unlinkSync(temporary);}
   }
   consume(line,row,since,cursor){
     let event;try{event=JSON.parse(line);}catch{return;}
@@ -63,7 +82,7 @@ export class DesktopCompletions {
       }catch{failures++;}finally{if(fd!==undefined)fs.closeSync(fd);}
     }
     for(const id of Object.keys(this.state.files))if(!retained.has(id))delete this.state.files[id];
-    this.state.initialized=true;writeJson(this.file,this.state);this.lastSuccess=this.clock();this.error=failures?`${failures} 个桌面日志暂时不可读`:null;
+    this.state.initialized=true;this.save();this.lastSuccess=this.clock();this.error=failures?`${failures} 个桌面日志暂时不可读`:null;
   }
-  status(){return {lastSuccess:this.lastSuccess,error:this.error,files:Object.keys(this.state.files).length};}
+  status(){return {lastSuccess:this.lastSuccess,error:this.error,files:Object.keys(this.state.files).length,recoveredAt:this.recoveredAt??this.state.recoveredAt??null};}
 }
