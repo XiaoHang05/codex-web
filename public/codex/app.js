@@ -1,3 +1,5 @@
+import {mountExternalLinkPreviews} from './external-links.js';
+mountExternalLinkPreviews();
 import {mobileSidebarQuery,mountMobileSidebarShortcut} from './mobile-sidebar.js';
 import {sidebarIcon,sidebarActionButton} from './sidebar-actions.js';
 import {projectNotificationControls} from './project-notifications-ui.js';
