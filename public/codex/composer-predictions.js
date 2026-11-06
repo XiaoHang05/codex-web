@@ -11,7 +11,7 @@ export function composerPredictions({input,settings,request,blocked=()=>false,st
  bar.className='composer-predictions';bar.hidden=true;status.id='composer-prediction-status';status.setAttribute('role','status');
  accept.type='button';accept.className='composer-prediction-accept';accept.textContent='采用预测';accept.title='Tab 采用为草稿，不会发送';accept.hidden=true;bar.append(status,accept);input.after(bar);
  const label=document.createElement('label'),toggle=document.createElement('input'),description=document.createElement('p');
- toggle.type='checkbox';try{toggle.checked=storage.getItem('codex-composer-predictions')!=='off';}catch{toggle.checked=true;}
+ toggle.type='checkbox';try{toggle.checked=storage.getItem('codex-composer-predictions')==='on';}catch{toggle.checked=false;}
  label.className='composer-prediction-setting';label.append(toggle,document.createTextNode('显示输入预测（仅官方原生）'));
  description.className='muted';description.textContent='预测只填入草稿，需自行发送。桌面 App 的预测服务暂未开放给网页；网页实例由原生引擎与账号决定是否支持。不会调用替代模型。此开关保存在当前浏览器。';settings.append(label,description);
  let target=null,scope='',epoch=0,scopeEpoch=0,turn=null,attempted=null,suggestion='',reason='',composing=false,dismissed=false,timer=null,disabledSource=false,lastItems=[],lastBusy=true;
