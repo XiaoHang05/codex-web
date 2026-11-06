@@ -12,7 +12,7 @@ const pluginNames=[
 export function addCatalog({commands,skills,rows,files,append}){
  const all=commands(),get=name=>all.find(item=>item.name===name),used=new Set();
  const command=(name,label,icon)=>({...get(name),label,icon,group:'添加',disabled:get(name)?.disabled||(!get(name)?'当前功能尚未接入':null)});
- const items=[{label:'文件和文件夹',description:'添加图片、文本文件或路径引用',icon:'fileChange',group:'添加',run:files},
+ const items=[{label:'文件和文件夹',description:'拍照、添加图片、文本文件或路径引用',icon:'fileChange',group:'添加',run:files},
   {label:'附加 Microsoft Edge',description:'附加浏览器页面',icon:'webSearch',group:'添加',disabled:'网页暂不能读取 Edge 标签页，请复制网址到输入框'},
   command('project','在项目中工作','mcpToolCall'),{...command('goal','目标','contextCompaction'),description:get('goal')?.description},command('plan','计划模式','reasoning'),command('sketch','绘图','fileChange')];
  for(const [label,description,aliases]of pluginNames){
@@ -51,10 +51,11 @@ export function composerAdd({button,input,commands,skills,rows,append,attachImag
  const focusMenu=()=>{if(!touch())search?.focus({preventScroll:true});};
  const files=()=>[
   {label:'添加图片',description:'选择图片，加入输入框上方的图片预览',run:()=>pick('image/png,image/jpeg,image/webp',attachImages)},
+  {label:'拍照',description:'打开相机拍摄，确认后加入图片预览',run:()=>pick('image/*',attachImages,{capture:'environment'})},
   {label:'添加文本文件',description:'将文件名和文本内容加入草稿，最多 8 个、共 512 KB',run:()=>pick('.txt,.md,.csv,.tsv,.json,.js,.ts,.py,.css,.html,.xml,.yaml,.yml,.toml,.log,.tex,.sql,.rs,.go,.java,.c,.cpp,.h,.sh,.ps1',attachText)},
   {label:'引用文件或文件夹',description:'填写引擎所在电脑上的路径',run:()=>{const value=prompt('文件或文件夹路径（引擎所在电脑）');if(value?.trim())append('@'+value.trim());}}
  ];
- function pick(accept,action){const picker=document.createElement('input');picker.type='file';picker.multiple=true;picker.accept=accept;picker.hidden=true;document.body.append(picker);picker.onchange=async()=>{try{await action([...picker.files]);}catch(error){notice(error.message);}finally{picker.remove();}};picker.oncancel=()=>picker.remove();picker.click();}
+ function pick(accept,action,{capture}={}){const picker=document.createElement('input');picker.type='file';picker.multiple=!capture;picker.accept=accept;if(capture)picker.setAttribute('capture',capture);picker.hidden=true;document.body.append(picker);picker.onchange=async()=>{try{await action([...picker.files]);}catch(error){notice(error.message);}finally{picker.remove();}};picker.oncancel=()=>picker.remove();picker.click();}
  async function attachText(files){if(files.length>8||files.reduce((total,file)=>total+file.size,0)>512*1024)throw Error('请选择最多 8 个文本文件，合计不超过 512 KB');const contents=await Promise.all(files.map(async file=>{const text=await file.text();if(text.includes('\0'))throw Error(file.name+' 不是可读取的文本文件');return `文件：${file.name}\n${text}`;}));if(contents.length)append(contents.join('\n\n'));}
  const catalog=()=>addCatalog({commands,skills,rows,files,append});
  const choices=()=>[...list.querySelectorAll('button:not(:disabled)')];
