@@ -3,7 +3,7 @@
 .codex-app .mobile-sidebar-shortcut-menu button{display:block;width:100%;padding:10px;text-align:left;font-size:13px;color:var(--fg);background:transparent;border-radius:7px}
 .mobile-sidebar-shortcut-menu button:hover,.mobile-sidebar-shortcut-menu button:focus-visible{background:var(--surface)}
 @media(max-width:760px),(pointer:coarse) and (max-width:1024px){
-  .codex-app .app-sidebar{position:fixed;left:0;top:0;bottom:0;width:min(360px,86vw);max-width:100vw;max-height:none;transform:translateX(-101%);transition:transform .24s cubic-bezier(.22,.8,.3,1);z-index:20;margin:0!important;border-right:1px solid var(--border);padding-top:max(15px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  .codex-app .app-sidebar{position:fixed;left:0;top:0;bottom:0;width:100vw;max-width:100vw;max-height:none;transform:translateX(-101%);transition:transform .24s cubic-bezier(.22,.8,.3,1);z-index:20;margin:0!important;border-right:0;padding-top:max(15px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom))}
   .codex-app.sidebar-open .app-sidebar{transform:translateX(0)}
   .codex-app #toggle-sidebar{display:block}
   .codex-app .sidebar-resizer{display:none}
@@ -22,6 +22,5 @@
   .mobile-sidebar-shortcut-settings{display:block;margin-block:18px}
   .mobile-sidebar-shortcut-settings label{display:flex;align-items:center;gap:9px;font-size:13px}
 }
-@media(max-width:760px) and (orientation:portrait){.codex-app .app-sidebar{width:100vw;max-width:100vw;border-right:0}}
 @keyframes shortcut-hold{to{stroke-dashoffset:0}}
 @media(prefers-reduced-motion:reduce){.codex-app .app-sidebar,.mobile-sidebar-shortcut-glyph{transition:none}.mobile-sidebar-shortcut.holding>.mobile-sidebar-shortcut-progress circle{animation:none}.mobile-sidebar-shortcut.pressing .mobile-sidebar-shortcut-glyph{transform:none}}
