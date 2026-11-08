@@ -52,3 +52,8 @@ UI 使用固定的 `/codex/` 与 `/codex-api/v1/` 同源挂载。文件预览、
 通知事件字段、HTTP载荷、已有引擎的出口所有权和发送前检查示例见 [通知边界与接入](NOTIFICATIONS.md)。
 
 源码与发布物职责、资源版本固定和无引擎重启更新见 [单一源码与宿主更新](UPDATING.md)。
+# Interrupted task continuation
+
+The browser offers a play button for the latest interrupted or failed turn. It starts a native empty-input turn (`input: []`, `turnTrigger: "resume_interrupted_task"`), preserving the composer draft. It never synthesizes a user text message.
+
+Compatibility addition: `POST /codex-api/v1/desktop/:threadId/send` accepts optional `turnTrigger: "resume_interrupted_task"` with `expectedTurnId`. This combination requires empty input and verifies the latest stopped turn, idle runtime and absence of pending approvals; stale state returns HTTP 409. Ordinary sends are unchanged. Web engines use the existing `turn/start` RPC. Authentication, CSRF, account ownership and native approval policies remain enforced; existing callers need no migration.

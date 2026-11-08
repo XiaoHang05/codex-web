@@ -14,6 +14,7 @@ import {inlineQuestionRequest} from '../../public/codex/inline-questions.js';
 import {desktopModelCatalog} from '../../src/model-settings.js';
 import {nativePolicy} from '../../src/preferences.js';
 import {fault} from '../../src/storage.js';
+import {desktopTurns,activeDesktopTurn} from '../../public/codex/desktop-turn-state.js';
 
 // Desktop sharing depends on a platform-specific, versioned native IPC surface.
 // It is loaded only by explicit configuration or an authenticated embedder.
@@ -61,7 +62,16 @@ export async function createDesktopAdapter(options, ctx, existing) {
       if(req.method!=='POST')throw fault('桌面控制仅支持 POST',405);
       if(action==='follow'){res.json({state:await desktop.follow(threadId)});return true;}
       let params=req.body||{};
-      if(action==='send')params={turnStart:{request:{threadId,input:params.input,...nativePolicy(context.preferences.registerSession(`desktop:${threadId}`))},context:{inheritThreadSettings:true}}};
+      if(action==='send'){
+        const recovery=params.turnTrigger==='resume_interrupted_task';
+        if(params.turnTrigger!==undefined&&!recovery)throw fault('无效轮次触发方式');
+        if(recovery){
+          if(!Array.isArray(params.input)||params.input.length||typeof params.expectedTurnId!=='string'||!params.expectedTurnId)throw fault('继续任务需要空输入和原轮次');
+          const state=await desktop.follow(threadId),latest=desktopTurns(state).at(-1);
+          if(!latest||(latest.turnId||latest.id)!==params.expectedTurnId||!['interrupted','failed'].includes(latest.status)||activeDesktopTurn(state)||['active','running','inProgress','busy'].includes(state?.threadRuntimeStatus?.type)||(state?.requests||[]).some(request=>request.completed!==true&&request.request?.completed!==true))throw fault('会话状态已变化，请刷新后再继续',409);
+        }
+        params={turnStart:{request:{threadId,input:params.input,...(recovery?{turnTrigger:'resume_interrupted_task'}:{}),...nativePolicy(context.preferences.registerSession(`desktop:${threadId}`))},context:{inheritThreadSettings:true}}};
+      }
       res.json(await desktop.control(threadId,action,params));return true;
     },
     async close(){if(owned)desktop.close();},

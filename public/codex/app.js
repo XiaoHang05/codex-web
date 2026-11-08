@@ -30,6 +30,7 @@ import {connectionRetryRecord,historicalConnectionRetry,recordConnectionError} f
 import {acceptNativeUser,acceptQueuedUser,acceptStartedTurn,restoreLocalUsers} from './live-user.js';
 import {acceptReplyItem,appendReplyDelta,mergeReplyRead,discardReplyDrafts} from './stream-replies.js?v=retry-cleanup-1';
 import {activeDesktopTurn,desktopTurns} from './desktop-turn-state.js';
+import {taskControlState,paintTaskControl} from './task-control.js';
 import {inlineQuestionRequest} from './inline-questions.js';
 import {sandboxSettings} from './sandbox-ui.js';
 import {loginFlow} from './login-flow.js';
@@ -265,7 +266,7 @@ let defaultsPolicy={access:'workspace-write',approval:'manual'};let commandOptio
 const queueBox=document.createElement('section');queueBox.className='composer-queue';queueBox.setAttribute('aria-label','待发送消息');queueBox.hidden=true;document.querySelector('.composer-wrap').insertBefore(queueBox,document.querySelector('.composer'));
 const composerSizing=composerResize(document.querySelector('.composer-wrap'),$('input'),queueBox,$('requests'),{beforeKeyboardFollow:()=>{stopViewSettling?.();restoreView=null;}});
 const predictions=composerPredictions({input:$('input'),settings:document.querySelector('[data-panel="defaults"]'),request:api,blocked:()=>!!pendingSkill||!!pendingImages.length||!!selected?.protected||!!selected?.conflict||!!selected?.accountMismatch});
-let queued=[],queueScope=null,queueReady=Promise.resolve(),queueOperation=Promise.resolve(),queueDispatching=false,queuePaused=false,awaitingDesktopStart=false,chatStateReady=false,sendingTurn=false,pendingPaste=Promise.resolve();
+let queued=[],queueScope=null,queueReady=Promise.resolve(),queueOperation=Promise.resolve(),queueDispatching=false,queuePaused=false,awaitingDesktopStart=false,chatStateReady=false,sendingTurn=false,pendingPaste=Promise.resolve(),webQuestionTurns=[];
 const imageTray=document.createElement('div');imageTray.className='composer-image-tray';imageTray.hidden=true;$('input').before(imageTray);
 function paintImages(){
  predictions.refresh();
@@ -278,7 +279,9 @@ function paintImages(){
  }
 }
 function currentQueueScope(){return selected?(selected.mode==='web'?`web:${profile}:${selected.threadId}`:`desktop:${selected.threadId}`):null;}
+function currentTaskControl(){return taskControlState({turns:selected?.mode==='desktop'?desktopTurns(desktopSnapshot):webQuestionTurns,activeTurn:turnId,ready:!!selected&&chatStateReady,blocked:!!selected?.protected||!!selected?.conflict||!!selected?.accountMismatch,pending:sendingTurn||awaitingDesktopStart||queued.length>0||queueDispatching||queuePaused});}
 function paintQueue(){
+ paintTaskControl($('interrupt'),currentTaskControl());
  const queuedMode=!!selected&&(!!turnId||awaitingDesktopStart||sendingTurn||queued.length>0||!chatStateReady);$('send').title=queuedMode?'加入发送队列（当前任务完成后发送）':'发送消息';$('send').setAttribute('aria-label',queuedMode?'加入发送队列':'发送消息');
  queueBox.replaceChildren();queueBox.hidden=!queued.length;if(!queued.length)return;
  const header=document.createElement('div');header.className='composer-queue-header';const heading=document.createElement('strong');heading.textContent=`排队发送 · ${queued.length} 条`;const hint=document.createElement('span');hint.textContent=queuePaused?'发送结果待确认，请检查聊天记录':queueDispatching?'正在发送队首消息':queuedMessages.snapshot(queueScope)?.reason||(queuedMessages.snapshot(queueScope)?.nativeShared?'已同步到 App 队列，审批沿用 App 设置':'已保存到后端，任务完成后依次发送');header.append(heading,hint);
@@ -350,9 +353,9 @@ async function open(row,{restorePosition=true}={}){
   pending.ready=true;render(displayedItems);
   stopViewSettling=settleChatView($('messages'),pending.saved,()=>{if(restoreView===pending)restoreView=null;});
 }
-let webReadEpoch=0,replyHydrationPending=false,webQuestionTurns=[];
+let webReadEpoch=0,replyHydrationPending=false;
 async function read(){if(!selected||selected.mode!=='web')return;const epoch=++webReadEpoch,target=selected,activeProfile=profile;const result=await rpc('thread/read',{threadId:target.threadId,includeTurns:true});if(selected!==target||profile!==activeProfile||epoch!==webReadEpoch)return;const thread=result.thread;webQuestionTurns=thread.turns||[];modelSelection.actual(result);if(thread.webTokenUsage)threadUsage.set(target.threadId,thread.webTokenUsage);const previousUsers=new Map(liveItems),retries=new Map([...liveItems.values()].filter(item=>item.type==='connectionRetry').map(item=>[item._turnId,item]));liveItems.clear();turnId=null;for(const turn of thread.turns||[]){if(turn.status==='inProgress')turnId=turn.id;const entries=turnItems(turn),retry=retries.get(turn.id),finalIndex=entries.findLastIndex(item=>item._replyComplete);if(retry)entries.splice(finalIndex<0?entries.length:finalIndex,0,{...retry,_turnStatus:turn.status});for(const item of entries)liveItems.set(item.id||crypto.randomUUID(),item);}mergeReplyRead(liveItems,previousUsers,{turns:thread.turns||[]});restoreLocalUsers(liveItems,previousUsers);render([...liveItems.values()]);chatStateReady=true;paintQueue();stateLabel(thread.status?.type||'就绪');await requests();void drainQueue();}
-function desktopState(state,{streaming=false}={}){if(selected?.mode!=='desktop')return;desktopSnapshot=state;if(!syncDesktopSettings.pending&&modelSelection.actual(state))void modelCatalog().catch(error=>notice(error.message));if(!syncDesktopSettings.pending){const actual=desktopComposerSettings(state);let changed=false;for(const [key,value]of [['collaborationMode',actual.mode],['serviceTier',actual.serviceTier]])if(value!==undefined&&commandOptions[key]!==value){commandOptions={...commandOptions,[key]:value};changed=true;}if(changed)paintCommandOptions();for(const [id,value]of [['access',actual.access],['approval',actual.approval]])if(value&&$(id).value!==value){$(id).value=value;$(id).syncAppearance();}$('approval').title=actual.granular?'App 当前使用精细审批规则；选择其他策略会更新桌面设置':'';}if(Object.hasOwn(state,'threadGoal'))conversationUI.goal(state.threadGoal||null);turnId=activeDesktopTurn(state);chatStateReady=true;if(turnId)awaitingDesktopStart=false;paintQueue();$('interrupt').disabled=!turnId||!!selected.protected||!!selected.conflict||!!selected.accountMismatch;const items=desktopTurns(state).flatMap(turn=>desktopTurnItems(turn,desktopMessages));(streaming?renderStreaming:render)(mergeDesktopHistory(desktopPages.items(),items));stateLabel(selected.protected?'当前管理会话：只读':`桌面 · ${state.threadRuntimeStatus?.type||'已连接'}`);renderRequests(state.requests||[],true);void drainQueue();}
+function desktopState(state,{streaming=false}={}){if(selected?.mode!=='desktop')return;desktopSnapshot=state;if(!syncDesktopSettings.pending&&modelSelection.actual(state))void modelCatalog().catch(error=>notice(error.message));if(!syncDesktopSettings.pending){const actual=desktopComposerSettings(state);let changed=false;for(const [key,value]of [['collaborationMode',actual.mode],['serviceTier',actual.serviceTier]])if(value!==undefined&&commandOptions[key]!==value){commandOptions={...commandOptions,[key]:value};changed=true;}if(changed)paintCommandOptions();for(const [id,value]of [['access',actual.access],['approval',actual.approval]])if(value&&$(id).value!==value){$(id).value=value;$(id).syncAppearance();}$('approval').title=actual.granular?'App 当前使用精细审批规则；选择其他策略会更新桌面设置':'';}if(Object.hasOwn(state,'threadGoal'))conversationUI.goal(state.threadGoal||null);turnId=activeDesktopTurn(state);chatStateReady=true;if(turnId||awaitingDesktopStart&&(desktopTurns(state).at(-1)?.turnId||desktopTurns(state).at(-1)?.id)!==awaitingDesktopStart)awaitingDesktopStart=false;paintQueue();const items=desktopTurns(state).flatMap(turn=>desktopTurnItems(turn,desktopMessages));(streaming?renderStreaming:render)(mergeDesktopHistory(desktopPages.items(),items));stateLabel(selected.protected?'当前管理会话：只读':`桌面 · ${state.threadRuntimeStatus?.type||'已连接'}`);renderRequests(state.requests||[],true);void drainQueue();}
 async function requests(){const target=selected,id=profile;if(target?.mode!=='web')return;const pending=await api(`/codex-api/v1/codex/${id}/pending`);if(selected===target&&profile===id)renderRequests(pending,false);}
 let renderedRequestsKey='';
 function renderRequests(requests,desktopMode){
@@ -397,7 +400,24 @@ bind('send',async()=>{
  }finally{sendingTurn=false;paintQueue();}
 });
 bind('steer',async()=>{await pendingPaste;const draft={text:$('input').value.trim(),images:[...pendingImages],skill:pendingSkill};await submitSteering(draft);clearSentDraft(draft);});
-bind('interrupt',async()=>{const target=selected,expectedTurnId=turnId;if(!target||!expectedTurnId||!confirm('确认中断当前任务？'))return;if(selected!==target||turnId!==expectedTurnId)throw Error('当前轮次已变化，请重新确认');if(target.mode==='desktop')await api(`/codex-api/v1/desktop/${target.threadId}/interrupt`,{expectedTurnId});else await rpc('turn/interrupt',{threadId:target.threadId,turnId:expectedTurnId});});
+bind('interrupt',async()=>{
+ const target=selected,control=currentTaskControl();if(!target||control.disabled)return;
+ if(control.action==='continue'){
+  sendingTurn=true;paintQueue();
+  try{
+   await queueReady;await syncQueue();if(target.mode==='desktop'&&syncDesktopSettings.pending)await syncDesktopSettings.tail;
+   if(selected!==target)throw Error('会话已切换');
+   if(target.mode==='desktop'){const response=await api(`/codex-api/v1/desktop/${target.threadId}/follow`,{});if(selected!==target)throw Error('会话已切换');if(!response.state)throw Error('等待桌面状态同步');desktopState(response.state);}else await read();
+   const latest=currentTaskControl();
+   if(selected!==target||latest.action!=='continue'||latest.turnId!==control.turnId||turnId||queued.length||target.protected||target.conflict||target.accountMismatch)throw Error('会话状态已变化，请确认后再继续');
+   const result=target.mode==='desktop'?await api(`/codex-api/v1/desktop/${target.threadId}/send`,{input:[],turnTrigger:'resume_interrupted_task',expectedTurnId:control.turnId}):await rpc('turn/start',{threadId:target.threadId,input:[],turnTrigger:'resume_interrupted_task',...modelParams(true)});
+   if(selected===target){if(result.turn?.id){turnId=result.turn.id;acceptStartedTurn(liveItems,result.turn);}else if(target.mode==='desktop'&&(desktopTurns(desktopSnapshot).at(-1)?.turnId||desktopTurns(desktopSnapshot).at(-1)?.id)===control.turnId)awaitingDesktopStart=control.turnId;}
+   markRecent(target.mode==='desktop'?'desktop':'web:'+rowProfile(target),target.threadId);
+  }finally{sendingTurn=false;paintQueue();}
+  return;
+ }
+ const expectedTurnId=control.turnId;if(!expectedTurnId||!confirm('确认中断当前任务？'))return;if(selected!==target||turnId!==expectedTurnId)throw Error('当前轮次已变化，请重新确认');if(target.mode==='desktop')await api(`/codex-api/v1/desktop/${target.threadId}/interrupt`,{expectedTurnId});else await rpc('turn/interrupt',{threadId:target.threadId,turnId:expectedTurnId});
+});
 for(const id of ['access','approval'])$(id).onchange=()=>savePolicy().then(()=>notice('策略已保存，下次发送时应用')).catch(e=>notice(e.message));
 function providerFields(){const provider=$('provider').value;$('base-url').closest('label').hidden=provider!=='custom';$('api-key').closest('label').hidden=provider==='chatgpt';$('model').placeholder=provider==='custom'?'输入服务支持的模型 ID（必填）':'留空使用原生默认模型';}
 $('provider').onchange=()=>{$('api-key').value='';providerFields();};
