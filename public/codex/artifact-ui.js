@@ -1,12 +1,20 @@
 import {imageViewer} from './image-viewer.js';
 import {normalizeArtifactPath} from './artifact-path.js';
 import {api} from '/codex/common.js';import {marked,renderMath} from './math-markdown.js';import DOMPurify from '/codex/vendor/purify.js';
-const panel=document.createElement('aside');panel.className='artifact-panel';panel.inert=true;panel.setAttribute('aria-label','文件预览');panel.innerHTML='<header><strong class="artifact-name">文件预览</strong><a class="artifact-download" hidden>下载</a><button class="icon-button artifact-close" aria-label="关闭预览">×</button></header><div class="artifact-content" aria-live="polite"></div>';
+const panel=document.createElement('aside');panel.className='artifact-panel';panel.inert=true;panel.setAttribute('aria-label','文件预览');panel.innerHTML='<header><strong class="artifact-name">文件预览</strong><a class="artifact-download" hidden>下载</a><button type="button" class="icon-button artifact-expand" aria-label="全屏预览" title="全屏预览" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button><button class="icon-button artifact-close" aria-label="关闭预览">×</button></header><div class="artifact-content" aria-live="polite"></div>';
 const scrim=document.createElement('button');scrim.className='artifact-scrim';scrim.setAttribute('aria-label','关闭文件预览');scrim.hidden=true;
 const viewer=imageViewer();
 document.body.append(scrim,panel);let request=0,lastFocus;
-const close=()=>{request++;panel.classList.remove('open');panel.inert=true;scrim.hidden=true;lastFocus?.focus();};
-panel.querySelector('.artifact-close').onclick=close;scrim.onclick=close;document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.querySelector('.image-zoom.open')&&panel.classList.contains('open'))close();});
+const expand=panel.querySelector('.artifact-expand'),wide=matchMedia('(min-width:761px)');
+function setExpanded(value){
+  value=Boolean(value&&wide.matches);panel.classList.toggle('expanded',value);
+  expand.setAttribute('aria-pressed',String(value));expand.title=value?'退出全屏预览 (Esc)':'全屏预览';expand.setAttribute('aria-label',value?'退出全屏预览':'全屏预览');
+  expand.querySelector('path').setAttribute('d',value?'M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5':'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5');
+}
+expand.onclick=()=>setExpanded(!panel.classList.contains('expanded'));
+wide.addEventListener('change',()=>{if(!wide.matches){setExpanded(false);if(document.activeElement===expand)panel.querySelector('.artifact-close').focus();}});
+const close=()=>{request++;setExpanded(false);panel.classList.remove('open');panel.inert=true;scrim.hidden=true;lastFocus?.focus();};
+panel.querySelector('.artifact-close').onclick=close;scrim.onclick=close;document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!document.querySelector('.image-zoom.open,.external-preview[open]')&&panel.classList.contains('open')){event.preventDefault();if(panel.classList.contains('expanded')){setExpanded(false);expand.focus();}else close();}});
 export async function preview(path,context){
   path=normalizeArtifactPath(path);
   const version=++request;lastFocus=document.activeElement;const content=panel.querySelector('.artifact-content'),download=panel.querySelector('.artifact-download');download.hidden=true;download.removeAttribute('href');content.classList.remove('artifact-empty');content.textContent='正在读取…';panel.querySelector('.artifact-name').textContent=String(path).split(/[\\/]/).at(-1);panel.classList.add('open');panel.inert=false;scrim.hidden=false;panel.querySelector('.artifact-close').focus();
