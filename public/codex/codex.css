@@ -15,3 +15,10 @@
 
 @media(min-width:761px){.app-sidebar{position:relative}.sidebar-resizer{position:absolute;right:0;top:0;bottom:0;width:6px;cursor:col-resize;touch-action:none;z-index:2}.sidebar-resizer:hover,.sidebar-resizer:focus-visible{background:var(--border)}.sidebar-resizing,.sidebar-resizing *{cursor:col-resize!important;user-select:none!important}}
 @media(max-width:760px){.sidebar-resizer{display:none}}
+
+.chat-load{display:flex;align-items:center;gap:8px;flex:none;padding:8px max(16px,calc((100% - var(--chat-column-width,780px))/2));font-size:13px;color:var(--muted)}
+.chat-load[hidden],.chat-load button[hidden],.codex-app[data-booting] .welcome{display:none}
+.chat-load button{flex:none;padding:4px 9px;font-size:inherit}
+[data-loading="true"]::before{content:"";display:inline-block;flex:none;width:12px;height:12px;box-sizing:border-box;border:2px solid var(--border);border-top-color:var(--fg);border-radius:50%;vertical-align:-1px;animation:thread-spin .85s linear infinite}
+.project-picker-status[data-loading="true"]::before,.history-load-earlier[data-loading="true"]::before{margin-inline-end:6px}
+@media(prefers-reduced-motion:reduce){[data-loading="true"]::before{animation:none}}

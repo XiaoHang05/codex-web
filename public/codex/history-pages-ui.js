@@ -53,7 +53,7 @@ export function mergeDesktopHistory(archive,live){
 export function historyPages({api,current,changed,notice,scroller}){
  let target=null,archive=[],cursor=null,more=false,busy=false,epoch=0;
  const button=document.createElement('button');button.type='button';button.className='history-load-earlier';button.dataset.item='history-load-earlier';
- const paint=()=>{button.textContent=busy?'正在加载更早消息…':'加载更早消息';button.disabled=busy;};paint();
+ const paint=()=>{button.textContent=busy?'正在加载更早消息…':'加载更早消息';button.disabled=busy;button.dataset.loading=String(busy);};paint();
  const load=async(initial=false)=>{
   if(!target||busy||!initial&&!more)return;
   const active=target,generation=epoch,oldCursor=cursor;busy=true;paint();

@@ -34,7 +34,7 @@ import {taskControlState,paintTaskControl} from './task-control.js';
 import {inlineQuestionRequest} from './inline-questions.js';
 import {sandboxSettings} from './sandbox-ui.js';
 import {loginFlow} from './login-flow.js';
-import {$,api,session,bind,notice,browserState} from '/codex/common.js';
+import {$,api,loadingApi,session,bind,notice,browserState} from '/codex/common.js';
 import {marked,renderMath} from './math-markdown.js';
 import DOMPurify from '/codex/vendor/purify.js';
 import {copyButton,turnItems,desktopTurnItems,userMetadata,animateDisclosure,mountDisclosures,replyActions,messageNavigator,processingHeader} from './message-ui.js';
@@ -50,6 +50,7 @@ import {groupProjectRows,orderProjectGroups,projectIdentity,projectSetting,proje
 import {chooseProject,projectInfo,setActionDisabled} from './project-picker.js';
 import {workspaceChrome} from './workspace-chrome.js';
 import {savedChat} from './chat-selection.js';
+import {paintLoad,waitForLive} from './chat-load.js';
 import {slashCommands,commandDialog} from './slash-commands.js';
 import {statusView} from './native-status.js';
 import {commandCatalog} from './command-catalog.js';
@@ -64,12 +65,26 @@ const recentStyles=document.createElement('link');recentStyles.rel='stylesheet';
 if('scrollRestoration' in history)history.scrollRestoration='manual';
 mountMobileTopbar();
 mountMobileDocumentScroll();
-const paneMode=new URLSearchParams(location.search).has('pane');const loginInfo=await session();const projectNoticeContainer=document.createElement('div');document.querySelector('[data-panel="notifications"]').append(projectNoticeContainer);const projectNotices=projectNotificationControls({container:projectNoticeContainer,request:api,notice});const serviceCapabilities=await api('/codex-api/v1/capabilities');Object.assign(browserState,serviceCapabilities.browserState);if(serviceCapabilities.standalone){const link=document.createElement('a');link.href='/codex/access.html';link.textContent='网站访问设置';document.querySelector('[data-panel="runtime"]').append(link);}let profile='default',settingsProfile='default',selected=null,rows=[],turnId=null,liveItems=new Map(),profiles=[],models=[],commandSkills=[];const feedbackThreads=new Set(),desktopFeedback=new Map();
+const loadBanner=$('chat-load'),liveEvents=new EventTarget();
+let viewLoad=null,liveReady=false,liveGeneration=0,booting=true,readyThread=null;
+function cancelViewLoad(){viewLoad?.abort();viewLoad=null;paintLoad(loadBanner,'');}
+function beginViewLoad(text){
+ cancelViewLoad();
+ const load=new AbortController();viewLoad=load;
+ paintLoad(loadBanner,text,{busy:true});
+ return load;
+}
+function finishViewLoad(load,text='',retry){
+ if(viewLoad!==load)return;
+ cancelViewLoad();
+ if(text)paintLoad(loadBanner,text,{retry});
+}
+const paneMode=new URLSearchParams(location.search).has('pane');const loginInfo=await session(AbortSignal.timeout(25000));const projectNoticeContainer=document.createElement('div');document.querySelector('[data-panel="notifications"]').append(projectNoticeContainer);const projectNotices=projectNotificationControls({container:projectNoticeContainer,request:api,notice});const serviceCapabilities=await loadingApi('/codex-api/v1/capabilities');Object.assign(browserState,serviceCapabilities.browserState);if(serviceCapabilities.standalone){const link=document.createElement('a');link.href='/codex/access.html';link.textContent='网站访问设置';document.querySelector('[data-panel="runtime"]').append(link);}let profile='default',settingsProfile='default',selected=null,rows=[],turnId=null,liveItems=new Map(),profiles=[],models=[],commandSkills=[];const feedbackThreads=new Set(),desktopFeedback=new Map();
 const recentActivity=recentThreadActivity(),recentView=recentThreadsView($('recent-threads'),row=>open(row).catch(error=>notice(error.message)),{render:chatRowActions,pinned:row=>!!pinnedThreads[row.key]});
 function renderRecent(){recentView.render(recentActivity.latest(rows),selected?.key,feedbackThreads);}
 let recentFrame=0;
 function markRecent(source,threadId){const row=rows.find(row=>row.threadId===threadId&&row.sources.includes(source));if(row)recentActivity.touch(row);else refreshAfterActivity();if(!recentFrame)recentFrame=requestAnimationFrame(()=>{recentFrame=0;renderRecent();});}
-async function rpc(method,params={},id=profile){return api(`/codex-api/v1/codex/${id}/rpc`,{method,params});}
+async function rpc(method,params={},id=profile,request=api){return request(`/codex-api/v1/codex/${id}/rpc`,{method,params});}
 for(const id of ['composer-model','reasoning','access','approval'])animatedSelect($(id));
 const fastModeIndicator=document.createElement('span');fastModeIndicator.className='fast-mode-indicator';fastModeIndicator.textContent='⚡';fastModeIndicator.hidden=true;fastModeIndicator.setAttribute('role','img');fastModeIndicator.setAttribute('aria-label','快速模式');fastModeIndicator.title='快速模式';$('reasoning').parentElement.querySelector('.select-trigger').prepend(fastModeIndicator);
 const projectControls=projectListControls($('threads'),$('collapse-projects'));
@@ -82,9 +97,47 @@ function showSidebarMenu(items,x,y,anchor){if(openSidebarMenu&&anchor&&sidebarMe
 document.addEventListener('pointerdown',event=>{if(openSidebarMenu&&!openSidebarMenu.contains(event.target)&&!sidebarMenuAnchor?.contains(event.target)){dismissSidebarMenu();}});document.addEventListener('keydown',event=>{if(event.key==='Escape'&&openSidebarMenu){event.preventDefault();event.stopImmediatePropagation();dismissSidebarMenu();}});
 function attachSidebarMenu(element,items){sidebarPress(element,{onMenu:(x,y)=>showSidebarMenu(typeof items==='function'?items():items,x,y),startDrag:element.matches('.project>summary')?point=>sidebarSort.startDrag(element,point):undefined});}
 const desktopProjectDrafts=new Set();
-async function startInProject(cwd,{source='web',requestId}={}){cwd=normalizeProjectDirectory(cwd);const previous=workspace.activeId();workspace.newChat();if(previous&&workspace.activeId()===previous)return false;const tab=workspace.activeId();if(source==='desktop'){desktopProjectDrafts.add(tab);stateLabel('正在创建桌面会话…');for(const id of ['send','input'])$(id).disabled=true;try{const result=await api('/codex-api/v1/desktop-projects/threads',{cwd,requestId:requestId||crypto.randomUUID(),access:defaultsPolicy.access,approval:defaultsPolicy.approval});await refresh();if(workspace.activeId()!==tab||selected){notice(result.warning||'桌面会话已创建，请从项目列表打开');return;}if(!result.attached){notice(result.warning);return;}const row=rows.find(row=>row.threadId===result.thread.id&&row.sources.includes('desktop'));if(!row)throw Error('桌面会话已创建，列表仍在同步，请刷新后打开');await open(row);return;}finally{desktopProjectDrafts.delete(tab);if(workspace.activeId()===tab&&!selected){for(const id of ['send','input'])$(id).disabled=false;stateLabel('新聊天');}}}commandOptions={...commandOptions,cwd};localStorage.setItem('codex-command-options:'+(inputScope()||'new'),JSON.stringify(commandOptions));paintCommandOptions();workspace.saveDraft();$('input').focus();}
-function selectDraftProject(cwd,options={}){cwd=normalizeProjectDirectory(cwd);if(selected||options.source==='desktop')return startInProject(cwd,options);commandOptions={...commandOptions,cwd};localStorage.setItem('codex-command-options:'+(inputScope()||'new'),JSON.stringify(commandOptions));paintCommandOptions();workspace.saveDraft();$('input').focus();}
-function openProjectPicker(newChat=false,cwd){return chooseProject({api,rows,desktopEnabled:serviceCapabilities.desktop.enabled,current:cwd||selected?.cwd||commandOptions.cwd||profiles.find(row=>row.id===profile)?.cwd,source:selected?.mode||'web',onSelect:newChat?startInProject:selectDraftProject,notice});}
+async function prepareDraft(text='正在准备新聊天…'){
+ const load=beginViewLoad(text);
+ try{await modelCatalog();finishViewLoad(load);}
+ catch(error){
+  finishViewLoad(load,'新聊天配置加载失败 · '+error.message,()=>void prepareDraft(text).catch(()=>{}));
+  throw error;
+ }
+}
+async function startInProject(cwd,{source='web',requestId=crypto.randomUUID()}={}){
+ cwd=normalizeProjectDirectory(cwd);
+ const previous=workspace.activeId();workspace.newChat();
+ if(previous&&workspace.activeId()===previous)return false;
+ if(source!=='desktop')return selectDraftProject(cwd);
+ const tab=workspace.activeId(),load=beginViewLoad('正在创建桌面会话…');
+ desktopProjectDrafts.add(tab);
+ for(const id of ['send','input'])$(id).disabled=true;
+ try{
+  const result=await api('/codex-api/v1/desktop-projects/threads',{cwd,requestId,access:defaultsPolicy.access,approval:defaultsPolicy.approval});
+  await refresh();
+  if(load.signal.aborted||workspace.activeId()!==tab||selected){notice(result.warning||'桌面会话已创建，请从项目列表打开');return;}
+  if(!result.attached)throw Error(result.warning||'桌面会话尚未连接');
+  const row=rows.find(row=>row.threadId===result.thread.id&&row.sources.includes('desktop'));
+  if(!row)throw Error('桌面会话已创建，列表仍在同步，请重试');
+  await open(row);
+ }catch(error){
+  if(viewLoad===load)finishViewLoad(load,'桌面会话未就绪 · '+error.message,()=>void startInProject(cwd,{source,requestId}).catch(()=>{}));
+  throw error;
+ }finally{
+  desktopProjectDrafts.delete(tab);
+  if(workspace.activeId()===tab&&!selected&&!viewLoad)for(const id of ['send','input'])$(id).disabled=false;
+ }
+}
+async function selectDraftProject(cwd,options={}){
+ cwd=normalizeProjectDirectory(cwd);
+ if(selected||options.source==='desktop')return startInProject(cwd,options);
+ commandOptions={...commandOptions,cwd};
+ localStorage.setItem('codex-command-options:'+(inputScope()||'new'),JSON.stringify(commandOptions));
+ paintCommandOptions();workspace.saveDraft();$('input').focus();
+ await prepareDraft('正在准备项目聊天…');
+}
+function openProjectPicker(newChat=false,cwd){return chooseProject({api:loadingApi,rows,desktopEnabled:serviceCapabilities.desktop.enabled,current:cwd||selected?.cwd||commandOptions.cwd||profiles.find(row=>row.id===profile)?.cwd,source:selected?.mode||'web',onSelect:newChat?startInProject:selectDraftProject,notice});}
 function projectActions(cwd,{includeInfo=true}={}){const unavailable=cwd==='未指定项目';return [...(includeInfo?[['查看项目目录',()=>showProjectInfo(cwd),unavailable]]:[]),['在此项目新建网页会话',()=>startInProject(cwd,{source:'web'}),unavailable],...(serviceCapabilities.desktop.enabled?[['在此项目新建桌面会话',()=>startInProject(cwd,{source:'desktop'}),()=>unavailable||api('/codex-api/v1/desktop-projects/capabilities').then(result=>!result.create)]]:[]),[projectNotices.enabled(cwd)?'关闭项目通知':'开启项目通知',()=>projectNotices.toggle(cwd)],[projectSetting(pinnedProjects,cwd)?'取消置顶项目':'置顶项目',()=>sidebarAction('projectPin',cwd,!projectSetting(pinnedProjects,cwd))],['编辑项目名称',async()=>{const value=prompt('项目显示名称（留空恢复目录名）',projectSetting(projectNames,cwd)||'');if(value!==null)await sidebarAction('projectName',cwd,value.trim());else return false;}]];}
 function canArchiveRow(row){return !!(rowProfile(row)||row.sources?.includes('desktop'))&&!row.protected&&!row.conflict&&!row.accountMismatch;}
 function chatActions(row){return [[pinnedThreads[row.key]?'取消置顶聊天':'置顶聊天',()=>sidebarAction('threadPin',row.key,!pinnedThreads[row.key])],['归档聊天',()=>archiveRow(row),!canArchiveRow(row)]];}
@@ -105,13 +158,13 @@ function syncProjectNotificationButtons(){
 projectNotices.subscribe(syncProjectNotificationButtons);
 function showProjectInfo(cwd){return projectInfo({cwd,name:projectSetting(projectNames,cwd),actions:projectActions(cwd,{includeInfo:false}),notice});}
 function paintProjectDirectory(){const cwd=selected?.cwd||commandOptions.cwd||profiles.find(row=>row.id===profile)?.cwd,button=$('project-directory');button.querySelector('span').textContent=cwd?cwd.split(/[\\/]/).filter(Boolean).at(-1)||cwd:'选择项目';button.title=cwd||'为新会话选择项目目录';button.setAttribute('aria-label',selected&&cwd?'查看当前项目目录':'选择项目目录');}
-async function archiveRow(row){const id=rowProfile(row);if((!id&&!row.sources?.includes('desktop'))||row.protected||row.conflict||row.accountMismatch)throw Error('此会话暂不能在网页归档');if(!confirm('归档“'+(row.name||'会话')+'”？历史会保留。'))return;const desktop=row.sources?.includes('desktop');const result=desktop?await api('/codex-api/v1/desktop-management/'+row.threadId+'/archive',{}):await rpc('thread/archive',{threadId:row.threadId},id);if(result?.warning)notice(result.warning);if(selected?.key===row.key){workspace.detachMissing(row.threadId);selected=null;liveItems.clear();void loadQueue();render([]);$('title').textContent='新聊天';$('source').textContent='';stateLabel('已归档');}await refresh();}
+async function archiveRow(row){const id=rowProfile(row);if((!id&&!row.sources?.includes('desktop'))||row.protected||row.conflict||row.accountMismatch)throw Error('此会话暂不能在网页归档');if(!confirm('归档“'+(row.name||'会话')+'”？历史会保留。'))return;const desktop=row.sources?.includes('desktop');const result=desktop?await api('/codex-api/v1/desktop-management/'+row.threadId+'/archive',{}):await rpc('thread/archive',{threadId:row.threadId},id);if(result?.warning)notice(result.warning);if(selected?.key===row.key){cancelViewLoad();workspace.detachMissing(row.threadId);selected=null;liveItems.clear();void loadQueue();render([]);$('title').textContent='新聊天';$('source').textContent='';stateLabel('已归档');}await refresh();}
 const conversationUI=conversationStatus($('messages'),document.querySelector('.composer-wrap'),async(action,patch,context)=>{if(context?.mode==='desktop')throw Error('桌面目标的单独管理暂不可用，请在 App 中操作');if(!context||context.mode!=='web')throw Error('请先打开聊天');const result=await api(`/codex-api/v1/goals/web/${context.profile}/${context.threadId}`,{action,...patch});if(selected?.threadId===context.threadId&&profile===context.profile)conversationUI.goal(result.goal??null);});async function refreshGoal(){const target=selected;if(!target)return;try{const result=target.mode==='desktop'?await api('/codex-api/v1/desktop-goal/'+target.threadId):await rpc('thread/goal/get',{threadId:target.threadId});if(selected===target)conversationUI.goal(result.goal);}catch{if(selected===target)conversationUI.goal(null);}}
 let displayedItems=[];const updateNavigator=messageNavigator($('messages'));
 async function branchReply(item,target,activeProfile){try{const result=await api('/codex-api/v1/branches',{source:target.mode,profile:activeProfile,threadId:target.threadId,lastTurnId:item._turnId});await refresh();await open(rows.find(row=>row.threadId===result.thread.id)||{threadId:result.thread.id,name:'分支会话',cwd:result.thread.cwd,sources:['web:'+activeProfile]});}catch(error){notice(error.message);}}
 let desktopMessages=[],desktopSnapshot=null,desktopMessageStamp='';
-const desktopPages=historyPages({api,current:()=>selected,changed:items=>{if(desktopSnapshot)desktopState(desktopSnapshot);else render(items);},notice,scroller:$('messages')});
-async function refreshDesktopMessages(){const target=selected;if(target?.mode!=='desktop')return;const result=await api(`/codex-api/v1/desktop/${target.threadId}/messages`);if(selected!==target)return;const stamp=JSON.stringify(result.messages);if(stamp!==desktopMessageStamp){desktopMessages=result.messages;desktopMessageStamp=stamp;if(desktopSnapshot)desktopState(desktopSnapshot);}}
+const desktopPages=historyPages({api:loadingApi,current:()=>selected,changed:items=>{if(desktopSnapshot)desktopState(desktopSnapshot);else render(items);},notice,scroller:$('messages')});
+async function refreshDesktopMessages(){const target=selected;if(target?.mode!=='desktop')return;const result=await loadingApi(`/codex-api/v1/desktop/${target.threadId}/messages`);if(selected!==target)return;const stamp=JSON.stringify(result.messages);if(stamp!==desktopMessageStamp){desktopMessages=result.messages;desktopMessageStamp=stamp;if(desktopSnapshot)desktopState(desktopSnapshot);}}
 const inputScope=()=>selected?`${selected.mode}:${selected.mode==='web'?profile:'desktop'}:${selected.threadId}`:null;
 let restoreView=null,viewTimer,stopViewSettling;
 function storedView(scope){try{return JSON.parse(localStorage.getItem('codex-view:'+scope)||'null');}catch{return null;}}
@@ -207,14 +260,15 @@ function render(items){
   const flush=()=>{flushTools();flushImages();};
   for(const item of items){renderItem=item;if(item.type!=='userMessage'&&item._turnId&&!timedTurns.has(item._turnId)){timedTurns.add(item._turnId);const timing=processingHeader(item);if(timing){flush();cached('processing:'+item._turnId,JSON.stringify([item._processingStartedAt,item._durationMs,item._turnStatus,latestByTurn.get(item._turnId)?.type==='reasoning'&&workActive(latestByTurn.get(item._turnId))]),()=>timing);}}const retry=item.type==='connectionRetry'?item:historicalConnectionRetry(item,text(item));if(retry){flush();cached(retry.id||'retry:'+retry._turnId,JSON.stringify([retry.attempt,retry.reasons,retry._turnStatus,retry.historical]),()=>connectionRetryRecord(retry,expanded),retry);continue;}if(item.type==='contextCompaction'){flush();cached('compaction:'+item.id,JSON.stringify([item._running,item.windowNumber,text(item),item.contextStart]),()=>compactionRecord(item,expanded));continue;}if(item.type==='imageView'){flushTools();images.push(item);continue;}if(toolTypes.has(item.type)){flushImages();if(item.type!=='reasoning'||text(item).trim()||workActive(item))tools.push(item);continue;}const user=item.type==='userMessage'?users.get(item):null;const content=user?.text??text(item);if(!content&&!user?.images.length)continue;flush();const key=item.id||item._turnId+':'+items.indexOf(item),signature=JSON.stringify([content,user?.images,item.type,item._replyComplete,item._sentAt,item._steering,item._turnStatus,item._completedAt,item._durationMs,item._deliveryStatus]);const previous=previousNodes.get(key);if(previous?.dataset.signature===signature){mark(previous,item);desired.push(previous);continue;}const p=document.createElement('div');p.dataset.item=key;p.dataset.signature=signature;p.className='message '+(item.type==='userMessage'?'user':'');
     if(item.type==='userMessage'){p.classList.toggle('with-images',!!user.images.length);if(user.images.length){const attachments=document.createElement('div');attachments.className='user-image-attachments';for(const image of user.images)attachments.append(imageThumbnail(image,{mode:selected.mode,profile,threadId:selected.threadId},{eager:true,zoom:true}));p.append(attachments);}const body=document.createElement('span');const answer=questionReply(content);if(answer){if(user.images.length)answer.node.classList.add('user-text-bubble');p.append(answer.node);}else if(content){body.textContent=content;if(user.images.length)body.className='user-text-bubble';p.append(body);}userMetadata(p,item,answer?.copy||content);}else{p.innerHTML=DOMPurify.sanitize(markdown(content,{images:true}),{USE_PROFILES:{html:true},FORBID_TAGS:['img','style','form','input','button','iframe'],FORBID_ATTR:['style']});renderMath(p);mountReplyImages(p,selected?{mode:selected.mode,profile,threadId:selected.threadId}:null);for(const link of p.querySelectorAll('a')){link.target='_blank';link.rel='noopener noreferrer';const href=link.dataset.artifactPath||link.getAttribute('href');if(selected&&href&&isArtifactLink(href)){link.onclick=event=>{event.preventDefault();let path=href.replace(/^file:\/\/\/?/,'').replace(/:\d+(?::\d+)?$/,'');try{path=decodeURIComponent(path);}catch{}preview(path,{mode:selected.mode,profile,threadId:selected.threadId});};}}for(const pre of p.querySelectorAll('pre')){const wrap=document.createElement('div');wrap.className='code-wrap';pre.replaceWith(wrap);wrap.append(pre);const copy=copyButton(pre.innerText,'复制代码');copy.classList.add('copy-code');wrap.append(copy);}if(item._replyComplete){const target=selected,activeProfile=profile;p.append(replyActions(item,content,scope,()=>branchReply(item,target,activeProfile),(rating,onSent)=>feedbackDialog({api,selected:target,profile:activeProfile,rating,itemId:item.id,onSent})));}}mountFileCitations(p,selected?{mode:selected.mode,profile,threadId:selected.threadId}:null);p.dataset.running=String(!!item._running);mountDisclosures(p,{expanded,restore:!!previous});mark(p,item);desired.push(p);
-  }flush();desired.splice(0,desired.length,...foldTurnWork(desired,previousNodes,expanded));desktopPages.decorate(desired);for(let index=0;index<desired.length;index++)if(box.children[index]!==desired[index])box.insertBefore(desired[index],box.children[index]||null);while(box.children.length>desired.length)box.lastElementChild.remove();for(const list of box.querySelectorAll('.work-group>.work-list')){const saved=workScroll.get(list.parentElement.dataset.item);if(saved)list.scrollTop=saved.bottom?list.scrollHeight:saved.top;else list.scrollTop=workListsAtBottom?list.scrollHeight:0;}if(!restoreDisclosureScroll(box)){if(restoreView?.scope===scope){if(restoreView.ready)applyChatView(box,restoreView.saved);else box.scrollTop=box.scrollHeight;}else box.scrollTop=nearBottom?box.scrollHeight:previousTop;}updateNavigator();conversationUI.items(items,selected?{mode:selected.mode,profile,threadId:selected.threadId}:null);
+  }flush();desired.splice(0,desired.length,...foldTurnWork(desired,previousNodes,expanded));desktopPages.decorate(desired);if(selected&&chatStateReady&&!desired.length)cached('empty-chat','empty',()=>{const empty=document.createElement('p');empty.className='muted';empty.textContent='此会话暂无消息';return empty;},null);for(let index=0;index<desired.length;index++)if(box.children[index]!==desired[index])box.insertBefore(desired[index],box.children[index]||null);while(box.children.length>desired.length)box.lastElementChild.remove();for(const list of box.querySelectorAll('.work-group>.work-list')){const saved=workScroll.get(list.parentElement.dataset.item);if(saved)list.scrollTop=saved.bottom?list.scrollHeight:saved.top;else list.scrollTop=workListsAtBottom?list.scrollHeight:0;}if(!restoreDisclosureScroll(box)){if(restoreView?.scope===scope){if(restoreView.ready)applyChatView(box,restoreView.saved);else box.scrollTop=box.scrollHeight;}else box.scrollTop=nearBottom?box.scrollHeight:previousTop;}updateNavigator();conversationUI.items(items,selected?{mode:selected.mode,profile,threadId:selected.threadId}:null);
 }
 // Coalesce native/token bursts into the next display frame, retaining the latest state.
 function renderStreaming(items){renderStreaming.items=items;if(renderStreaming.frame)return;renderStreaming.frame=requestAnimationFrame(()=>{renderStreaming.frame=0;render(renderStreaming.items);});}
 function stateLabel(value){const raw=String(value||''),short=raw.replace(/^桌面 · /,'');const label={idle:'',active:'执行中',inProgress:'执行中',completed:'已完成',failed:'执行失败',notLoaded:'历史记录',interrupted:'已中断',waitingOnApproval:'等待审批','已连接桌面原实例':'','已连接':'','就绪':'','准备就绪':'','当前管理会话：只读':'只读','连接桌面会话…':'连接中'}[short]??short;$('state').textContent=label;$('state').title=raw;}
 let activityRefreshTimer=null;
+let historyLoaded=false;
 function refreshAfterActivity(){if(activityRefreshTimer)return;activityRefreshTimer=setTimeout(()=>{activityRefreshTimer=null;void refresh().catch(()=>{});},1000);}
-async function refresh(){rows=await api('/codex-api/v1/history');if(selected?.mode==='web'){const current=rows.find(row=>row.threadId===selected.threadId&&row.sources.includes('web:'+profile));if(current){selected.accountMismatch=current.accountMismatch;if(current.accountMismatch)for(const id of ['send','steer'])$(id).disabled=true;}}renderThreads();}
+async function refresh(){rows=await loadingApi('/codex-api/v1/history');historyLoaded=true;if(selected?.mode==='web'){const current=rows.find(row=>row.threadId===selected.threadId&&row.sources.includes('web:'+profile));if(current){selected.accountMismatch=current.accountMismatch;if(current.accountMismatch)for(const id of ['send','steer'])$(id).disabled=true;}}renderThreads();}
 function renderThreads(){
   renderRecent();
   const box=$('threads'),scroller=$('sidebar-history'),scroll=scroller.scrollTop,query=$('search').value.trim().toLowerCase();
@@ -247,7 +301,7 @@ function renderThreads(){
     }
     group.append(body);animateDisclosure(group,body);group.addEventListener('toggle',()=>{try{localStorage.setItem('codex-collapsed-projects',JSON.stringify([...box.querySelectorAll('details:not([open])')].map(e=>e.dataset.project)));}catch{}});box.append(group);
   }
-  if(!groups.size){const p=document.createElement('p');p.className='muted';p.textContent=query?'没有匹配的会话':'暂无会话';box.append(p);}projectControls.sync({search:!!query});syncProjectNotificationButtons();scroller.scrollTop=scroll;
+  if(historyLoaded&&!groups.size){const p=document.createElement('p');p.className='muted';p.textContent=query?'没有匹配的会话':'暂无会话';box.append(p);}projectControls.sync({search:!!query});syncProjectNotificationButtons();scroller.scrollTop=scroll;
 }
 function sidebar(show){if(matchMedia(mobileSidebarQuery).matches){document.body.classList.toggle('sidebar-open',show);$('sidebar-scrim').hidden=!show;$('sidebar').inert=!show;}else document.body.classList.toggle('sidebar-collapsed',!show);$('toggle-sidebar').setAttribute('aria-expanded',String(show));}
 bind('toggle-sidebar',()=>{sidebar(true);if(matchMedia(mobileSidebarQuery).matches)$('close-sidebar').focus({preventScroll:true});else $('search').focus();});bind('close-sidebar',()=>{sidebar(false);$('toggle-sidebar').focus();});bind('sidebar-scrim',()=>sidebar(false));$('search').oninput=renderThreads;
@@ -256,12 +310,12 @@ sidebarResize($('sidebar'));
 const mobile=matchMedia(mobileSidebarQuery);
 mobile.addEventListener('change',()=>{
   document.body.classList.remove('sidebar-open','sidebar-collapsed');
-  $('sidebar-scrim').hidden=true;$('sidebar').inert=mobile.matches;
+  $('sidebar-scrim').hidden=true;$('sidebar').inert=booting||mobile.matches;
   $('toggle-sidebar').setAttribute('aria-expanded',String(!mobile.matches));
 });
-$('sidebar').inert=mobile.matches;
+$('sidebar').inert=booting||mobile.matches;
 if(!paneMode)mountMobileSidebarShortcut({toggle:()=>sidebar(!document.body.classList.contains('sidebar-open')),settings:document.querySelector('[data-panel="defaults"]'),notice});
-document.addEventListener('keydown',event=>{if(event.key==='Escape'){sidebar(false);closeLayer($('account-modal'),()=>{$('account-modal').style.display='none';});}if((event.ctrlKey||event.metaKey)&&event.key==='k'){event.preventDefault();$('new').click();}});
+document.addEventListener('keydown',event=>{if(booting)return;if(event.key==='Escape'){sidebar(false);closeLayer($('account-modal'),()=>{$('account-modal').style.display='none';});}if((event.ctrlKey||event.metaKey)&&event.key==='k'){event.preventDefault();$('new').click();}});
 let defaultsPolicy={access:'workspace-write',approval:'manual'};let commandOptions={},pendingSkill=null,pendingImages=[],threadUsage=new Map();const modeStatus=document.createElement('div');modeStatus.className='composer-mode-status';document.querySelector('.composer').prepend(modeStatus);
 const queueBox=document.createElement('section');queueBox.className='composer-queue';queueBox.setAttribute('aria-label','待发送消息');queueBox.hidden=true;document.querySelector('.composer-wrap').insertBefore(queueBox,document.querySelector('.composer'));
 const composerSizing=composerResize(document.querySelector('.composer-wrap'),$('input'),queueBox,$('requests'),{beforeKeyboardFollow:()=>{stopViewSettling?.();restoreView=null;}});
@@ -327,7 +381,7 @@ const commandMenu=slashCommands($('input'),composerCommands,notice);
 composerAdd({refreshSkills:refreshCommandSkills,button:$('composer-add'),input:$('input'),commands:composerCommands,skills:()=>commandSkills,rows:()=>rows,notice,closeSlash:()=>commandMenu.close(),append:text=>{const input=$('input');input.value+=(input.value&&!input.value.endsWith('\n')?'\n':'')+text+'\n';input.dispatchEvent(new Event('input',{bubbles:true}));workspace.saveDraft();},attachImages:async files=>{const tab=workspace.activeId();if(pendingImages.length+files.length>8)throw Error('一条消息最多添加 8 张图片');const images=await Promise.all(files.map(imageInput));if(workspace.activeId()!==tab){notice('会话已切换，请在当前会话重新添加图片');return;}pendingImages.push(...images);paintCommandOptions();workspace.saveDraft();}});
 restoreCommandOptions();
 $('reasoning').menuExtras=()=>{const model=models.find(model=>model.model===$('composer-model').value)||models.find(model=>model.isDefault)||models[0],tiers=model?.serviceTiers?.length?model.serviceTiers:(model?.additionalSpeedTiers||[]).map(id=>({id})),fast=tiers.find(tier=>['fast','priority'].includes(tier.id)),checked=['fast','priority','ultrafast'].includes(commandOptions.serviceTier);return [{label:'快速模式',description:fast?'更快响应，可能增加用量':'当前模型未返回可用快速档位',checked,disabled:!fast&&!checked,run:()=>{commandOptions={...commandOptions,serviceTier:checked?'default':fast.id};localStorage.setItem('codex-command-options:'+(inputScope()||'new'),JSON.stringify(commandOptions));paintCommandOptions();workspace.saveDraft();}}];};
-const workspace=workspaceChrome({$,notice,pinnedRow:row=>!!pinnedThreads[row?.key],togglePin:row=>sidebarAction('threadPin',row.key,!pinnedThreads[row.key]),attachments:()=>({skill:pendingSkill,images:pendingImages}),restoreAttachments:attachments=>{pendingSkill=attachments.skill&&typeof attachments.skill.name==='string'&&typeof attachments.skill.path==='string'?{name:attachments.skill.name,path:attachments.skill.path}:null;pendingImages=Array.isArray(attachments.images)?attachments.images.filter(image=>image?.type==='image'&&typeof image.url==='string'&&/^data:image\/(?:png|jpeg|webp);base64,/.test(image.url)).map(image=>({type:'image',url:image.url})):[];paintCommandOptions();},options:()=>commandOptions,reasoningOptions,restoreComposer:composer=>modelSelection.restore(composer),restoreOptions:options=>{commandOptions={...options};if(selected)delete commandOptions.cwd;localStorage.setItem('codex-command-options:'+(inputScope()||'new'),JSON.stringify(commandOptions));paintCommandOptions();},activateDraftProfile:async id=>{if(id===profile)return;if(!profiles.some(row=>row.id===id)){notice('草稿对应的配置已移除，请重新选择配置');return;}profile=id;await modelCatalog();await account(id);},selected:()=>selected,profile:()=>profile,rows:()=>rows,items:()=>displayedItems,open,renderThreads,transcript:()=>displayedItems.filter(item=>['userMessage','agentMessage'].includes(item.type)).map(item=>(item.type==='userMessage'?'用户':'Codex')+'：\n'+text(item)).join('\n\n'),preview:file=>preview(file,{mode:selected.mode,profile,threadId:selected.threadId}),clear:()=>{if(mobile.matches)sidebar(false);stopViewSettling?.();restoreView=null;selected=null;modelSelection.reset();void modelCatalog().catch(error=>notice(error.message));desktopPages.reset();turnId=null;liveItems.clear();desktopSnapshot=null;void loadQueue();conversationUI.goal(null);render([]);$('title').textContent='新聊天';$('source').textContent='';$('input').value='';$('access').value=defaultsPolicy.access;$('approval').value=defaultsPolicy.approval;$('access').syncAppearance();$('approval').syncAppearance();for(const id of ['send','input'])$(id).disabled=false;for(const id of ['steer','interrupt'])$(id).disabled=true;commandOptions={};pendingSkill=null;pendingImages=[];paintCommandOptions();localStorage.removeItem('codex-last-view'+(paneMode?':side':''));const address=new URL(location.href);for(const key of ['thread','profile','source','fresh'])address.searchParams.delete(key);history.replaceState(null,'',address);}});
+const workspace=workspaceChrome({$,notice,pinnedRow:row=>!!pinnedThreads[row?.key],togglePin:row=>sidebarAction('threadPin',row.key,!pinnedThreads[row.key]),attachments:()=>({skill:pendingSkill,images:pendingImages}),restoreAttachments:attachments=>{pendingSkill=attachments.skill&&typeof attachments.skill.name==='string'&&typeof attachments.skill.path==='string'?{name:attachments.skill.name,path:attachments.skill.path}:null;pendingImages=Array.isArray(attachments.images)?attachments.images.filter(image=>image?.type==='image'&&typeof image.url==='string'&&/^data:image\/(?:png|jpeg|webp);base64,/.test(image.url)).map(image=>({type:'image',url:image.url})):[];paintCommandOptions();},options:()=>commandOptions,reasoningOptions,restoreComposer:composer=>modelSelection.restore(composer),restoreOptions:options=>{commandOptions={...options};if(selected)delete commandOptions.cwd;localStorage.setItem('codex-command-options:'+(inputScope()||'new'),JSON.stringify(commandOptions));paintCommandOptions();},activateDraftProfile:async id=>{if(id===profile)return;if(!profiles.some(row=>row.id===id)){notice('草稿对应的配置已移除，请重新选择配置');return;}profile=id;await modelCatalog();void account(id).catch(error=>notice(error.message));},selected:()=>selected,profile:()=>profile,rows:()=>rows,items:()=>displayedItems,open,renderThreads,transcript:()=>displayedItems.filter(item=>['userMessage','agentMessage'].includes(item.type)).map(item=>(item.type==='userMessage'?'用户':'Codex')+'：\n'+text(item)).join('\n\n'),preview:file=>preview(file,{mode:selected.mode,profile,threadId:selected.threadId}),clear:()=>{if(mobile.matches)sidebar(false);stopViewSettling?.();restoreView=null;selected=null;modelSelection.reset();desktopPages.reset();turnId=null;liveItems.clear();desktopSnapshot=null;void loadQueue();conversationUI.goal(null);render([]);$('title').textContent='新聊天';$('source').textContent='';stateLabel('');$('input').value='';$('access').value=defaultsPolicy.access;$('approval').value=defaultsPolicy.approval;$('access').syncAppearance();$('approval').syncAppearance();for(const id of ['send','input'])$(id).disabled=false;for(const id of ['steer','interrupt'])$(id).disabled=true;commandOptions={};pendingSkill=null;pendingImages=[];paintCommandOptions();localStorage.removeItem('codex-last-view'+(paneMode?':side':''));const address=new URL(location.href);for(const key of ['thread','profile','source','fresh'])address.searchParams.delete(key);history.replaceState(null,'',address);void prepareDraft().catch(()=>{});}});
 $('input').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.repeat&&!event.shiftKey&&!event.isComposing&&event.keyCode!==229&&!matchMedia('(pointer:coarse)').matches){event.preventDefault();$('send').click();}});
 $('input').addEventListener('paste',event=>{const files=[...event.clipboardData?.items||[]].filter(item=>item.kind==='file'&&item.type.startsWith('image/')).map(item=>item.getAsFile()).filter(Boolean);if(!files.length)return;event.preventDefault();const plain=event.clipboardData.getData('text/plain');if(plain){$('input').setRangeText(plain,$('input').selectionStart,$('input').selectionEnd,'end');$('input').dispatchEvent(new Event('input',{bubbles:true}));}const tab=workspace.activeId();pendingPaste=Promise.all(files.map(imageInput)).then(images=>{if(workspace.activeId()!==tab)return;if(pendingImages.length+images.length>8)throw Error('单条消息最多附加 8 张图片');pendingImages.push(...images);paintCommandOptions();workspace.saveDraft();}).catch(error=>notice('粘贴图片失败：'+error.message));});
 for(const button of document.querySelectorAll('[data-prompt]'))button.onclick=()=>{$('input').value=button.dataset.prompt;$('input').focus();};
@@ -335,28 +389,97 @@ async function open(row,{restorePosition=true}={}){
   predictions.clear();
   stopViewSettling?.();stopViewSettling=null;saveView();clearTimeout(viewTimer);if(workspace.matchesSelection(selected))workspace.saveDraft();
   const previousProfile=profile;
+  row={...row};
+  const load=beginViewLoad('正在加载会话…');
   selected=row;webQuestionTurns=[];modelSelection.reset(true);chatStateReady=false;awaitingDesktopStart=false;feedbackThreads.delete(row.key);desktopPages.reset();commandMenu.close();conversationUI.goal(null);turnId=null;liveItems.clear();$('title').textContent=(row.name||'会话').slice(0,60);const web=row.sources.includes('desktop')?null:(row.availableSources?.find(source=>source.startsWith('web:'))||row.sources.find(s=>s.startsWith('web:')));selected.mode=web?'web':'desktop';if(web)profile=web.slice(4);void loadQueue();restoreCommandOptions();workspace.selected(row);$('source').textContent=selected.mode==='web'?'网页':'桌面';$('source').title=selected.mode==='web'?(row.accountMismatch?'网页实例 · 请切换回原账号':row.offline?'网页实例 · 连接中':'网页原生实例'):row.accountMismatch?'桌面实例 · 请切换回原账号':'桌面实例';void refreshGoal();
   const scope=inputScope();restoreView={scope,saved:restorePosition?storedView(scope):null,ready:false};try{localStorage.setItem('codex-last-view'+(paneMode?':side':''),JSON.stringify({threadId:row.threadId,key:row.key,principal:row.principal,profile,mode:selected.mode}));}catch{}const address=new URL(location.href);address.searchParams.set('thread',row.threadId);if(selected.mode==='web'){address.searchParams.set('profile',profile);address.searchParams.delete('source');}else address.searchParams.set('source','desktop');history.replaceState(null,'',address);
   if(mobile.matches)sidebar(false);renderThreads();for(const id of ['rename','fork','archive'])$(id).disabled=(selected.mode==='desktop'&&id!=='archive')||!!row.protected||row.conflict||row.accountMismatch;
-  $('input').disabled=false;for(const id of ['send','steer','interrupt'])$(id).disabled=!!row.protected||row.conflict||!!row.accountMismatch;if(selected.mode==='desktop')$('interrupt').disabled=true;
-  const pref=await api(`/codex-api/v1/session-preferences/${encodeURIComponent(selected.mode==='web'?`web:${profile}:${row.threadId}`:`desktop:${row.threadId}`)}`);if(selected!==row)return;$('access').value=pref.access;$('approval').value=pref.approval;$('access').syncAppearance();$('approval').syncAppearance();
-  await modelCatalog();if(selected!==row)return;if(selected.mode==='web'&&profile!==previousProfile){await account(profile);if(selected!==row)return;}
-  if(selected.mode==='desktop'){
-    commandSkills=[];void refreshCommandSkills().catch(error=>notice('桌面技能读取失败：'+error.message));desktopMessages=[];desktopSnapshot=null;desktopMessageStamp='';await refreshDesktopMessages();if(selected!==row)return;
-    desktopPages.reset(row);await desktopPages.start();if(selected!==row)return;stateLabel(row.protected?'当前管理会话：只读':'连接桌面会话…');
-    try{const response=await api(`/codex-api/v1/desktop/${row.threadId}/follow`,{});if(selected!==row)return;if(response.state)desktopState(response.state);stateLabel(row.protected?'当前管理会话：只读':'已连接桌面原实例');}catch(e){if(selected!==row)return;stateLabel(e.message);for(const id of ['send','steer','interrupt'])$(id).disabled=true;}
-  }else{commandSkills=[];void refreshCommandSkills().catch(error=>notice('网页技能读取失败：'+error.message));const id=profile;const resumed=await rpc('thread/resume',{threadId:row.threadId},id);if(selected===row&&profile===id){modelSelection.actual(resumed);await read();}}
-  if(selected!==row||restoreView?.scope!==scope)return;
-  const pending=restoreView;
-  if(selected.mode==='desktop'&&pending.saved&&!pending.saved.bottom)await desktopPages.restoreCount(pending.saved.historyCount||0);
-  if(selected!==row||restoreView!==pending)return;
-  pending.ready=true;render(displayedItems);
-  stopViewSettling=settleChatView($('messages'),pending.saved,()=>{if(restoreView===pending)restoreView=null;});
+  desktopMessages=[];desktopSnapshot=null;desktopMessageStamp='';
+  renderRequests([],row.mode==='desktop');render([]);stateLabel('');
+  $('input').disabled=false;setThreadReady(false);
+  try{
+    const pref=await loadingApi(`/codex-api/v1/session-preferences/${encodeURIComponent(row.mode==='web'?`web:${profile}:${row.threadId}`:`desktop:${row.threadId}`)}`);
+    if(selected!==row)return;
+    $('access').value=pref.access;$('approval').value=pref.approval;$('access').syncAppearance();$('approval').syncAppearance();
+    const catalog=modelCatalog();void catalog.catch(()=>{});
+    if(row.mode==='web'&&profile!==previousProfile)void account(profile).catch(error=>notice(error.message));
+    commandSkills=[];void refreshCommandSkills().catch(error=>{if(selected===row)notice('技能读取失败：'+error.message);});
+    if(row.mode==='desktop'){
+      paintLoad(loadBanner,'正在读取桌面聊天记录…',{busy:true});
+      desktopPages.reset(row);
+      await Promise.all([refreshDesktopMessages(),desktopPages.start()]);
+    }else{
+      paintLoad(loadBanner,'正在打开网页会话…',{busy:true});
+      const resumed=await rpc('thread/resume',{threadId:row.threadId},profile,loadingApi);
+      if(selected===row)modelSelection.actual(resumed);
+    }
+    if(selected!==row)return;
+    await catalog;
+    if(selected!==row)return;
+    const pending=restoreView;
+    if(row.mode==='desktop'&&pending?.scope===scope&&pending.saved&&!pending.saved.bottom)await desktopPages.restoreCount(pending.saved.historyCount||0);
+    if(selected!==row)return;
+    await connectThread(row,load);
+    if(selected!==row)return;
+    readyThread=row;setThreadReady(true);
+    finishViewLoad(load);
+    if(pending&&restoreView===pending){
+      pending.ready=true;render(renderStreaming.frame?renderStreaming.items:displayedItems);
+      stopViewSettling=settleChatView($('messages'),pending.saved,()=>{if(restoreView===pending)restoreView=null;});
+    }else render(renderStreaming.frame?renderStreaming.items:displayedItems);
+  }catch(error){
+    if(selected!==row)return;
+    setThreadReady(false);
+    finishViewLoad(load,'会话未就绪 · '+error.message,()=>void open(row).catch(()=>{}));
+    throw error;
+  }
 }
+function setThreadReady(ready){
+ chatStateReady=ready;
+ const blocked=!ready||selected?.protected||selected?.conflict||selected?.accountMismatch;
+ for(const id of ['send','steer'])$(id).disabled=!!blocked;
+ paintQueue();
+}
+async function connectThread(row,load){
+ const desktop=row.mode==='desktop';
+ while(selected===row&&!load.signal.aborted){
+   paintLoad(loadBanner,desktop?'正在连接桌面会话…':'正在连接实时消息…',{busy:true});
+   await waitForLive(liveEvents,()=>liveReady,load.signal,'实时连接尚未就绪');
+   if(selected!==row||load.signal.aborted)return;
+   const generation=liveGeneration;
+   if(desktop){
+     const response=await loadingApi(`/codex-api/v1/desktop/${row.threadId}/follow`,{});
+     if(selected!==row||load.signal.aborted)return;
+     if(response.state&&!desktopSnapshot)desktopState(response.state);
+     await waitForLive(liveEvents,()=>!!desktopSnapshot||liveGeneration!==generation,load.signal,'桌面尚未同步当前会话');
+   }else{
+     paintLoad(loadBanner,'正在同步聊天记录…',{busy:true});
+     await read(true);
+   }
+   if(liveReady&&generation===liveGeneration)return;
+   if(desktop)desktopSnapshot=null;
+ }
+}
+async function reconnectThread(row){
+ if(selected!==row)return;
+ const load=beginViewLoad('实时连接中断，正在重连…');
+ $('messages').querySelector('[data-item="empty-chat"]')?.remove();
+ setThreadReady(false);
+ if(row.mode==='desktop')desktopSnapshot=null;
+ try{
+   await connectThread(row,load);
+   if(selected!==row||load.signal.aborted)return;
+   setThreadReady(true);finishViewLoad(load);render(renderStreaming.frame?renderStreaming.items:displayedItems);
+ }catch(error){
+   if(selected===row)finishViewLoad(load,'实时同步失败 · '+error.message,()=>void reconnectThread(row));
+ }
+}
+
 let webReadEpoch=0,replyHydrationPending=false;
-async function read(){if(!selected||selected.mode!=='web')return;const epoch=++webReadEpoch,target=selected,activeProfile=profile;const result=await rpc('thread/read',{threadId:target.threadId,includeTurns:true});if(selected!==target||profile!==activeProfile||epoch!==webReadEpoch)return;const thread=result.thread;webQuestionTurns=thread.turns||[];modelSelection.actual(result);if(thread.webTokenUsage)threadUsage.set(target.threadId,thread.webTokenUsage);const previousUsers=new Map(liveItems),retries=new Map([...liveItems.values()].filter(item=>item.type==='connectionRetry').map(item=>[item._turnId,item]));liveItems.clear();turnId=null;for(const turn of thread.turns||[]){if(turn.status==='inProgress')turnId=turn.id;const entries=turnItems(turn),retry=retries.get(turn.id),finalIndex=entries.findLastIndex(item=>item._replyComplete);if(retry)entries.splice(finalIndex<0?entries.length:finalIndex,0,{...retry,_turnStatus:turn.status});for(const item of entries)liveItems.set(item.id||crypto.randomUUID(),item);}mergeReplyRead(liveItems,previousUsers,{turns:thread.turns||[]});restoreLocalUsers(liveItems,previousUsers);render([...liveItems.values()]);chatStateReady=true;paintQueue();stateLabel(thread.status?.type||'就绪');await requests();void drainQueue();}
-function desktopState(state,{streaming=false}={}){if(selected?.mode!=='desktop')return;desktopSnapshot=state;if(!syncDesktopSettings.pending&&modelSelection.actual(state))void modelCatalog().catch(error=>notice(error.message));if(!syncDesktopSettings.pending){const actual=desktopComposerSettings(state);let changed=false;for(const [key,value]of [['collaborationMode',actual.mode],['serviceTier',actual.serviceTier]])if(value!==undefined&&commandOptions[key]!==value){commandOptions={...commandOptions,[key]:value};changed=true;}if(changed)paintCommandOptions();for(const [id,value]of [['access',actual.access],['approval',actual.approval]])if(value&&$(id).value!==value){$(id).value=value;$(id).syncAppearance();}$('approval').title=actual.granular?'App 当前使用精细审批规则；选择其他策略会更新桌面设置':'';}if(Object.hasOwn(state,'threadGoal'))conversationUI.goal(state.threadGoal||null);turnId=activeDesktopTurn(state);chatStateReady=true;if(turnId||awaitingDesktopStart&&(desktopTurns(state).at(-1)?.turnId||desktopTurns(state).at(-1)?.id)!==awaitingDesktopStart)awaitingDesktopStart=false;paintQueue();const items=desktopTurns(state).flatMap(turn=>desktopTurnItems(turn,desktopMessages));(streaming?renderStreaming:render)(mergeDesktopHistory(desktopPages.items(),items));stateLabel(selected.protected?'当前管理会话：只读':`桌面 · ${state.threadRuntimeStatus?.type||'已连接'}`);renderRequests(state.requests||[],true);void drainQueue();}
-async function requests(){const target=selected,id=profile;if(target?.mode!=='web')return;const pending=await api(`/codex-api/v1/codex/${id}/pending`);if(selected===target&&profile===id)renderRequests(pending,false);}
+async function read(initial=false){if(!selected||selected.mode!=='web'||!initial&&!chatStateReady)return;const epoch=++webReadEpoch,target=selected,activeProfile=profile;const result=await rpc('thread/read',{threadId:target.threadId,includeTurns:true},activeProfile,loadingApi);if(selected!==target||profile!==activeProfile||epoch!==webReadEpoch)return;const thread=result.thread;if(thread?.id!==target.threadId||!Array.isArray(thread.turns))throw Error('未收到当前会话的聊天记录');webQuestionTurns=thread.turns;modelSelection.actual(result);if(thread.webTokenUsage)threadUsage.set(target.threadId,thread.webTokenUsage);const previousUsers=new Map(liveItems),retries=new Map([...liveItems.values()].filter(item=>item.type==='connectionRetry').map(item=>[item._turnId,item]));liveItems.clear();turnId=null;for(const turn of thread.turns||[]){if(turn.status==='inProgress')turnId=turn.id;const entries=turnItems(turn),retry=retries.get(turn.id),finalIndex=entries.findLastIndex(item=>item._replyComplete);if(retry)entries.splice(finalIndex<0?entries.length:finalIndex,0,{...retry,_turnStatus:turn.status});for(const item of entries)liveItems.set(item.id||crypto.randomUUID(),item);}mergeReplyRead(liveItems,previousUsers,{turns:thread.turns||[]});restoreLocalUsers(liveItems,previousUsers);render([...liveItems.values()]);paintQueue();stateLabel(thread.status?.type||'就绪');await requests();void drainQueue();}
+function hasDesktopTimeline(state){return Array.isArray(state?.turns)||!!state?.turnHistory?.history;}
+function desktopState(state,{streaming=false}={}){if(selected?.mode!=='desktop'||!hasDesktopTimeline(state))return;desktopSnapshot=state;if(!syncDesktopSettings.pending&&modelSelection.actual(state))void modelCatalog().catch(error=>notice(error.message));if(!syncDesktopSettings.pending){const actual=desktopComposerSettings(state);let changed=false;for(const [key,value]of [['collaborationMode',actual.mode],['serviceTier',actual.serviceTier]])if(value!==undefined&&commandOptions[key]!==value){commandOptions={...commandOptions,[key]:value};changed=true;}if(changed)paintCommandOptions();for(const [id,value]of [['access',actual.access],['approval',actual.approval]])if(value&&$(id).value!==value){$(id).value=value;$(id).syncAppearance();}$('approval').title=actual.granular?'App 当前使用精细审批规则；选择其他策略会更新桌面设置':'';}if(Object.hasOwn(state,'threadGoal'))conversationUI.goal(state.threadGoal||null);turnId=activeDesktopTurn(state);if(turnId||awaitingDesktopStart&&(desktopTurns(state).at(-1)?.turnId||desktopTurns(state).at(-1)?.id)!==awaitingDesktopStart)awaitingDesktopStart=false;paintQueue();const items=desktopTurns(state).flatMap(turn=>desktopTurnItems(turn,desktopMessages));(streaming?renderStreaming:render)(mergeDesktopHistory(desktopPages.items(),items));stateLabel(selected.protected?'当前管理会话：只读':`桌面 · ${state.threadRuntimeStatus?.type||'已连接'}`);renderRequests(state.requests||[],true);void drainQueue();}
+async function requests(){const target=selected,id=profile;if(target?.mode!=='web')return;const pending=await loadingApi(`/codex-api/v1/codex/${id}/pending`);if(selected===target&&profile===id)renderRequests(pending,false);}
 let renderedRequestsKey='';
 function renderRequests(requests,desktopMode){
   const target=selected,activeProfile=profile;const inline=inlineQuestionRequest(desktopMode?desktopTurns(desktopSnapshot):webQuestionTurns,target?.threadId);if(inline)requests=[...requests,inline];requests=requests.filter(request=>{const thread=request.params?.threadId||request.request?.params?.threadId||request.threadId;return request.completed!==true&&request.request?.completed!==true&&(!thread||thread===target?.threadId);});const key=JSON.stringify([target?.threadId,activeProfile,desktopMode,target?.protected,target?.accountMismatch,requests]);if(key===renderedRequestsKey)return;renderedRequestsKey=key;$('requests').replaceChildren();for(const request of requests){const panel=document.createElement('div');panel.className='card';const data=request.params||request.request?.params||request;const method=request.method||request.request?.method||'';const id=request.id??request.requestId;const title=document.createElement('h3');title.textContent=method.includes('requestUserInput')?'需要你的回答':'需要你的审批';panel.append(title);const details=document.createElement('pre');details.textContent=data.command||data.reason||data.message||JSON.stringify(data,null,2).slice(0,6000);panel.append(details);
@@ -386,7 +509,7 @@ async function submitSteering(draft){
  if(value)rememberInput(scope,{id:'accepted:'+crypto.randomUUID(),type:'userMessage',text:value,_sentAt:sentAt,_baseline:baseline,_steering:true,_afterItem:afterItem,_turnId:activeTurn});
 }
 bind('send',async()=>{
- if(sendingTurn)return;if(!selected&&desktopProjectDrafts.has(workspace.activeId()))throw Error('正在创建桌面会话，请稍候');sendingTurn=true;
+ if(sendingTurn)return;if(!selected&&viewLoad)throw Error('新聊天正在准备，请稍候');if(selected&&!chatStateReady)throw Error('当前会话尚未就绪');if(!selected&&desktopProjectDrafts.has(workspace.activeId()))throw Error('正在创建桌面会话，请稍候');sendingTurn=true;
  try{
  await pendingPaste;
  if(selected?.mode==='desktop'&&syncDesktopSettings.pending)await syncDesktopSettings.tail;
@@ -432,7 +555,7 @@ function reasoningOptions(){modelSelection.chooseModel($('composer-model').value
 async function modelCatalog(id=selected?.mode==='desktop'?'default':profile){
  const epoch=++catalogEpoch,scope=inputScope();
  const cwd=selected?.cwd||commandOptions.cwd;
- const [catalog,settings]=selected?.mode==='desktop'?[await api('/codex-api/v1/desktop-models'),{}]:await Promise.all([rpc('model/list',{},id),api('/codex-api/v1/model-settings/'+encodeURIComponent(id)+(cwd?'?cwd='+encodeURIComponent(cwd):'')).catch(()=>({}))]);
+ const [catalog,settings]=selected?.mode==='desktop'?[await loadingApi('/codex-api/v1/desktop-models'),{}]:await Promise.all([rpc('model/list',{},id,loadingApi),loadingApi('/codex-api/v1/model-settings/'+encodeURIComponent(id)+(cwd?'?cwd='+encodeURIComponent(cwd):'')).catch(()=>({}))]);
  if(epoch!==catalogEpoch||scope!==inputScope())return;
  models=catalog.data||[];modelSelection.catalog(models,selected?settings:defaultModelSettings(settings,defaultsPolicy));
  if(!selected&&commandOptions.serviceTier===undefined){const tier=defaultSpeed(defaultsPolicy,models.find(entry=>entry.model===$('composer-model').value));if(tier)commandOptions.serviceTier=tier;paintCommandOptions();}
@@ -443,7 +566,7 @@ $('reasoning').onchange=()=>{modelSelection.chooseEffort($('reasoning').value);w
 function webConversation(){if(!selected||selected.mode!=='web'||selected.protected||selected.conflict)throw Error('此操作只适用于网页持有的会话');}
 bind('rename',async()=>{webConversation();const name=prompt('会话名称',selected.name);if(!name?.trim())return;await rpc('thread/name/set',{threadId:selected.threadId,name:name.trim()});selected.name=name.trim();$('title').textContent=selected.name;await refresh();});
 bind('fork',async()=>{webConversation();const result=await rpc('thread/fork',{threadId:selected.threadId});await refresh();await open(rows.find(r=>r.threadId===result.thread.id)||{threadId:result.thread.id,name:'分支会话',cwd:result.thread.cwd,sources:[`web:${profile}`]});});
-bind('archive',async()=>{if(selected?.mode==='desktop'){await archiveRow(selected);return;}webConversation();if(!confirm('归档当前会话？历史会保留。'))return;await rpc('thread/archive',{threadId:selected.threadId});selected=null;liveItems.clear();void loadQueue();render([]);$('title').textContent='Codex';$('source').textContent='';stateLabel('已归档');await refresh();});
+bind('archive',async()=>{if(selected?.mode==='desktop'){await archiveRow(selected);return;}webConversation();if(!confirm('归档当前会话？历史会保留。'))return;await rpc('thread/archive',{threadId:selected.threadId});cancelViewLoad();selected=null;liveItems.clear();void loadQueue();render([]);$('title').textContent='Codex';$('source').textContent='';stateLabel('已归档');await refresh();});
 async function selectSettingsProfile(id){profiles=await api('/codex-api/v1/profiles');if(!profiles.some(row=>row.id===profile)){workspace.newChat();profile='default';await modelCatalog();} $('profile').replaceChildren();for(const p of profiles)$('profile').append(new Option(p.name,p.id));$('profile').value=id;fillProfile();await account();await settingsInfo();}
 const profileUI=profileManagementUI({$,selection:()=>settingsProfile,select:selectSettingsProfile,notice,useProfile:async id=>{
  workspace.newChat();profile=id;commandOptions={};pendingSkill=null;pendingImages=[];paintCommandOptions();$('composer-model').value='';$('reasoning').value='';await modelCatalog();await account(id);
@@ -500,9 +623,20 @@ events.addEventListener('codex',event=>{const x=JSON.parse(event.data);if(x.meth
   if(x.params?.item?.questions?.length)void read().catch(()=>{});
   if(x.id!==undefined||x.method==='serverRequest/resolved')requests().catch(()=>{});
 });
-events.addEventListener('desktop',event=>{const x=JSON.parse(event.data),activity=desktopActivity(x.state),previous=desktopFeedback.get(x.threadId);desktopFeedback.set(x.threadId,activity.feedback);if(recentActivity.desktopChanged(x.threadId,x.state))markRecent('desktop',x.threadId);if(previous===undefined||activity.feedback!==previous)refreshAfterActivity();if(previous!==undefined&&activity.feedback!==previous)markFeedback('desktop',x.threadId);const row=rows.find(row=>row.threadId===x.threadId&&row.sources.includes('desktop'));if(row){const changed=row.running!==activity.running||row.needsAttention!==activity.needsAttention;row.running=activity.running;row.needsAttention=activity.needsAttention;if(changed){renderThreads();refreshAfterActivity();}}if(selected?.mode==='desktop'&&selected.threadId===x.threadId){const oldUsers=desktopTurns(desktopSnapshot).flatMap(turn=>turn.items||[]).filter(item=>['userMessage','steeringUserMessage','steered'].includes(item.type)).map(item=>item.id).join('|');const newUsers=desktopTurns(x.state).flatMap(turn=>turn.items||[]).filter(item=>['userMessage','steeringUserMessage','steered'].includes(item.type)).map(item=>item.id).join('|');desktopState(x.state,{streaming:true});if(oldUsers!==newUsers)refreshDesktopMessages().catch(()=>{});}});
-events.addEventListener('desktop-offline',()=>{for(const row of rows)if(row.sources.includes('desktop')){row.running=false;row.needsAttention=false;}renderThreads();if(selected?.mode==='desktop'){stateLabel('桌面离线，不会自动接管');for(const id of ['send','steer','interrupt'])$(id).disabled=true;}});
-events.addEventListener('ready',()=>{if(selected?.mode==='web')read().catch(()=>{});if(selected?.mode==='desktop')api(`/codex-api/v1/desktop/${selected.threadId}/follow`,{}).catch(()=>{});});
+events.addEventListener('desktop',event=>{const x=JSON.parse(event.data),activity=desktopActivity(x.state),previous=desktopFeedback.get(x.threadId);desktopFeedback.set(x.threadId,activity.feedback);if(recentActivity.desktopChanged(x.threadId,x.state))markRecent('desktop',x.threadId);if(previous===undefined||activity.feedback!==previous)refreshAfterActivity();if(previous!==undefined&&activity.feedback!==previous)markFeedback('desktop',x.threadId);const row=rows.find(row=>row.threadId===x.threadId&&row.sources.includes('desktop'));if(row){const changed=row.running!==activity.running||row.needsAttention!==activity.needsAttention;row.running=activity.running;row.needsAttention=activity.needsAttention;if(changed){renderThreads();refreshAfterActivity();}}if(selected?.mode==='desktop'&&selected.threadId===x.threadId&&x.state){const oldUsers=desktopTurns(desktopSnapshot).flatMap(turn=>turn.items||[]).filter(item=>['userMessage','steeringUserMessage','steered'].includes(item.type)).map(item=>item.id).join('|');const newUsers=desktopTurns(x.state).flatMap(turn=>turn.items||[]).filter(item=>['userMessage','steeringUserMessage','steered'].includes(item.type)).map(item=>item.id).join('|');desktopState(x.state,{streaming:true});liveEvents.dispatchEvent(new Event('change'));if(oldUsers!==newUsers)refreshDesktopMessages().catch(()=>{});}});
+events.addEventListener('desktop-offline',()=>{for(const row of rows)if(row.sources.includes('desktop')){row.running=false;row.needsAttention=false;}renderThreads();if(selected?.mode==='desktop'){
+ const row=selected;desktopSnapshot=null;stateLabel('桌面离线，不会自动接管');setThreadReady(false);
+ if(!viewLoad&&row===readyThread)paintLoad(loadBanner,'桌面已离线 · 可查看已加载的聊天记录',{retry:()=>void reconnectThread(row)});
+}});
+events.addEventListener('ready',()=>{
+ liveReady=true;liveGeneration++;liveEvents.dispatchEvent(new Event('change'));
+ if(selected&&selected===readyThread&&!viewLoad&&!chatStateReady)void reconnectThread(selected);
+});
+events.addEventListener('error',()=>{
+ const connected=liveReady;
+ liveReady=false;
+ if(connected&&selected&&!viewLoad&&chatStateReady)void reconnectThread(selected);
+});
 const query=new URLSearchParams(location.search);
 // A new entry opens the latest messages; a reload keeps this reading position.
 const restoreInitialPosition=['reload','back_forward'].includes(performance.getEntriesByType('navigation')[0]?.type);
@@ -510,21 +644,34 @@ let lastView;try{lastView=JSON.parse(localStorage.getItem('codex-last-view'+(pan
 if(query.get('profile'))profile=query.get('profile');
 else if(!query.has('thread')&&lastView?.profile)profile=lastView.profile;
 else if(!query.has('thread')&&workspace.draftProfile())profile=workspace.draftProfile();
-await api('/codex-api/v1/application');profiles=await api('/codex-api/v1/profiles');
+paintLoad(loadBanner,'正在读取网页配置…',{busy:true});
+await loadingApi('/codex-api/v1/application');profiles=await loadingApi('/codex-api/v1/profiles');
 if(!profiles.some(row=>row.id===profile))profile='default';
-const initialPreferences=await api('/codex-api/v1/new-chat-defaults');
+const initialPreferences=await loadingApi('/codex-api/v1/new-chat-defaults');
 defaultsPolicy=initialPreferences.defaults;sidebarOrder=initialPreferences.sidebarOrder||sidebarOrder;
 projectNames=initialPreferences.projectNames||{};pinnedProjects=initialPreferences.pinnedProjects||{};pinnedThreads=initialPreferences.pinnedThreads||{};
-applyAppearance(initialPreferences.appearance);await refresh();settingsProfile=profile;
-await account().catch(e=>notice(e.message));await modelCatalog().catch(()=>{});
-try{await refreshCommandSkills();}catch{}
+applyAppearance(initialPreferences.appearance);
+paintLoad(loadBanner,'正在加载项目与会话列表…',{busy:true});
+await refresh();settingsProfile=profile;
+void account().catch(error=>notice(error.message));
 const requested=query.get('thread')||(query.has('fresh')?null:lastView?.threadId);
 if(requested){
   const source=query.get('source'),explicit=query.has('thread'),row=savedChat(rows,{threadId:requested,key:explicit?undefined:lastView?.key,principal:explicit?undefined:lastView?.principal,mode:source==='desktop'?'desktop':query.has('profile')?'web':explicit?undefined:lastView?.mode,profile:source==='desktop'?undefined:query.get('profile')||(!explicit?lastView?.profile:undefined)});
-  if(row)await open(row,{restorePosition:restoreInitialPosition});
+  if(row)await open(row,{restorePosition:restoreInitialPosition}).catch(()=>{});
   else{const recovered=workspace.detachMissing(requested);notice(recovered?'原聊天未加载，未发送内容已保留为新聊天草稿':'此聊天未加载或存在多个账号来源，请从会话列表选择');}
 }
+if(!selected){
+ if(requested)paintLoad(loadBanner,'未找到要打开的会话，请从项目列表选择');
+ else paintLoad(loadBanner,'正在准备新聊天…',{busy:true});
+ try{await modelCatalog();if(!requested)paintLoad(loadBanner,'');}
+ catch(error){paintLoad(loadBanner,'新聊天配置加载失败 · '+error.message,{retry:()=>location.reload()});}
+ void refreshCommandSkills().catch(()=>{});
+}
 if(!query.has('fresh'))await workspace.restoreDraft();
+booting=false;delete document.body.dataset.booting;
+$('sidebar').inert=mobile.matches;
+document.querySelector('.chat-header').inert=false;
+document.querySelector('.composer-wrap').inert=false;
 setInterval(()=>refresh().catch(()=>{}),30000);setInterval(()=>refreshDesktopMessages().catch(()=>{}),3000);
 
 setInterval(()=>refreshGoal().catch(()=>{}),5000);
