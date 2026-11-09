@@ -5,6 +5,8 @@
   .mobile-document-scroll .chat-body{display:block;overflow:visible;min-height:0;padding-bottom:calc(var(--document-composer-height,150px) + var(--document-keyboard-offset,0px))}
   .mobile-document-scroll .codex-app .messages{flex:none;height:auto;max-height:none;overflow:visible;overflow-anchor:none;min-height:max(0px,calc(100dvh - var(--document-header-height,61px) - var(--document-composer-height,150px)))}
   .mobile-document-scroll .mobile-topbar{position:sticky;top:0}
+  .mobile-document-scroll .chat-load{position:sticky;top:var(--document-header-height,61px);z-index:5;background:var(--page);border-bottom:1px solid var(--border)}
+  .mobile-document-scroll .app-main:has(>.mobile-topbar.is-retracted) .chat-load{min-height:calc(max(8px,env(safe-area-inset-top)) + 44px);padding-inline-start:max(66px,calc(env(safe-area-inset-left) + 56px))}
   .mobile-document-scroll .composer-wrap{position:fixed;left:0;right:0;bottom:var(--document-keyboard-offset,0px);margin-inline:auto;z-index:9}
   .mobile-document-scroll .message-navigator{position:fixed;top:calc(var(--document-header-height,61px) + 12px);bottom:calc(var(--document-composer-height,150px) + var(--document-keyboard-offset,0px) + 12px)}
   .mobile-document-scroll .jump-latest-controls{position:fixed;bottom:calc(var(--document-composer-height,150px) + var(--document-keyboard-offset,0px) + 12px)!important}
