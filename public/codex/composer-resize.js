@@ -1,5 +1,6 @@
 import {restoreDisclosureScroll} from './disclosure-motion.js';
 import {keyboardBottom} from './keyboard-bottom.js';
+import {layoutTiming} from './layout-motion.js';
 // Bottom-anchored sizing, shared by mouse, pen, touch and keyboard.
 export function composerResize(wrap,input,queue,requests,options={}){
  const composer=wrap.querySelector('.composer'),body=wrap.closest('.chat-body');
@@ -15,7 +16,7 @@ export function composerResize(wrap,input,queue,requests,options={}){
  const status=wrap.querySelector('.conversation-status');
  content.append(requests);if(status)content.append(status);content.append(queue);auxiliary.append(content);
  dock.append(auxiliary);wrap.prepend(dock);
- const small=matchMedia('(max-width:760px)'),key=()=> 'codex-composer-heights:'+(small.matches?'mobile':'desktop');
+ const small=matchMedia('(max-width:760px)'),reduced=matchMedia('(prefers-reduced-motion:reduce)'),key=()=> 'codex-composer-heights:'+(small.matches?'mobile':'desktop');
  let sizes={},frame=0,drag=null,auxAnimation=null,auxTarget=null;
  const load=()=>{try{const saved=JSON.parse(localStorage.getItem(key())||'{}');sizes={};for(const name of ['input','auxiliary'])if(Number.isFinite(saved[name])&&saved[name]>0)sizes[name]=saved[name];}catch{sizes={};}};
  const save=()=>{try{localStorage.setItem(key(),JSON.stringify(sizes));}catch{/* Resizing remains available without browser storage. */}};
@@ -36,9 +37,9 @@ export function composerResize(wrap,input,queue,requests,options={}){
   auxAnimation?.cancel();auxAnimation=null;auxTarget=height;
   dock.hidden=!present&&previous===0;dock.inert=!present;
   auxiliary.style.height=height+'px';
-  if(previous>height+.5&&drag?.name!=='auxiliary'&&!matchMedia('(prefers-reduced-motion:reduce)').matches){
+  if(Math.abs(previous-height)>.5&&drag?.name!=='auxiliary'&&!reduced.matches){
    dock.hidden=false;
-   const animation=auxiliary.animate([{height:previous+'px'},{height:height+'px'}],{duration:200,easing:'cubic-bezier(.2,.7,.2,1)'});auxAnimation=animation;
+   const animation=auxiliary.animate([{height:previous+'px'},{height:height+'px'}],layoutTiming);auxAnimation=animation;
    animation.onfinish=()=>{if(auxAnimation!==animation)return;auxAnimation=null;if(!present)dock.hidden=true;};
   }else dock.hidden=!present;
  }
@@ -70,6 +71,7 @@ export function composerResize(wrap,input,queue,requests,options={}){
   if(!restoreDisclosureScroll(messages)&&!keyboard.sync()&&pinned)messages.scrollTop=messages.scrollHeight;
  }
  const refresh=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(update);};
+ reduced.addEventListener('change',()=>{auxAnimation?.cancel();auxAnimation=null;refresh();});
  load();input.addEventListener('input',refresh);small.addEventListener('change',()=>{load();refresh();});window.addEventListener('resize',refresh);window.visualViewport?.addEventListener('resize',refresh);
  new ResizeObserver(refresh).observe(wrap);new ResizeObserver(refresh).observe(body);
  new ResizeObserver(refresh).observe(content);
