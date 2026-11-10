@@ -57,7 +57,8 @@ function orderTurnUsers(items,turnId){
 }
 export function restoreLocalUsers(items,previous){
  for(const local of previous.values())if(local._localUser||local._queueId){
-  const native=local._turnId&&initialUser(items,local._turnId);
+  const native=local._turnId?initialUser(items,local._turnId):[...items.values()].find(item=>item.type==='userMessage'&&!item._steering&&!item._queueId&&item._turnId&&!local._queueBaseline?.includes(item._turnId)&&sameDraftContent(local,item));
+  if(native&&!local._turnId)local._turnId=native._turnId;
   if(native){if(!native.content?.length)native.content=local.content;native._queueId=local._queueId;remember(items,local);remember(items,native);continue;}
   if(!items.has(local.id))items.set(local.id,local);
   if(local._turnId)orderTurnUsers(items,local._turnId);

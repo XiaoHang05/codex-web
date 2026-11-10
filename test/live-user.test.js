@@ -44,6 +44,19 @@ test('stale history reads retain the accepted user before the matching turn repl
  assert.deepEqual([...items.keys()],['queued:queue-one','reply']);
  const nativeItems=new Map([['server',native]]);restoreLocalUsers(nativeItems,previous);assert.equal(nativeItems.size,1);assert.deepEqual(nativeItems.get('server').content,input);
 });
+test('history reconciles a sending echo when both start and queue acknowledgments were missed',()=>{
+ const previous=new Map();acceptQueuedUser(previous,draft);
+ const items=new Map([['server',{id:'server',type:'userMessage',text:'hello',_turnId:'t'}]]);restoreLocalUsers(items,previous);
+ assert.equal(items.size,1);assert.equal(items.get('server')._queueId,draft.id);
+ assert.deepEqual(items.get('server').content,input);
+ acceptQueuedUser(items,draft,'t');assert.equal(items.size,1);
+});
+test('history cannot bind an unacknowledged echo to a preexisting identical message',()=>{
+ const recorded={id:'old-server',type:'userMessage',text:'hello',_turnId:'old-turn'};
+ const previous=new Map([['old-server',recorded]]);acceptQueuedUser(previous,{...draft,images:[]});
+ const items=new Map([['old-server',{...recorded}]]);restoreLocalUsers(items,previous);
+ assert.equal(items.size,2);assert.equal(items.get('queued:queue-one')._turnId,undefined);
+});
 test('steering messages retain their position after intervening work',()=>{
  const items=new Map([['server',native],['work',{id:'work',type:'reasoning',_turnId:'t'}]]);
  acceptNativeUser(items,{id:'steer',type:'userMessage',text:'extra',_turnId:'t',_steering:true});
