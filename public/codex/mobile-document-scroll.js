@@ -40,7 +40,7 @@ export function mountMobileDocumentScroll(){
   });
   messages.getBoundingClientRect=()=>active?bounds():nativeRect();
   messages.scrollTo=(options,y)=>{
-    if(!active)return nativeScrollTo(options,y);
+    if(!active)return typeof options==='number'?nativeScrollTo(options,y):nativeScrollTo(options);
     if(typeof options==='number')window.scrollTo(options,y);else window.scrollTo({...options,left:0});
   };
   function layout(){

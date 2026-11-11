@@ -16,6 +16,7 @@ export function jumpLatest(scroller){
  };
  const cancel=()=>{cancelAnimationFrame(jumpFrame);jumpFrame=0;};
  const jump=()=>{
+  scroller.dispatchEvent(new Event('jump-latest'));
   cancel();const start=scroller.scrollTop,started=performance.now();
   if(matchMedia('(prefers-reduced-motion:reduce)').matches){scroller.scrollTo({top:scroller.scrollHeight,behavior:'instant'});sync();return;}
   const step=now=>{const progress=Math.min(1,(now-started)/260),target=scroller.scrollHeight-scroller.clientHeight;scroller.scrollTo({top:start+(target-start)*(1-Math.pow(1-progress,3)),behavior:'instant'});if(progress<1)jumpFrame=requestAnimationFrame(step);else{jumpFrame=0;sync();}};jumpFrame=requestAnimationFrame(step);

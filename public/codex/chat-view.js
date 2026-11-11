@@ -15,11 +15,11 @@ export function applyChatView(box,saved){
 export function settleChatView(box,saved,done){
  let stopped=false,frame;
  const apply=()=>{if(!stopped)applyChatView(box,saved);};
- const stop=()=>{if(stopped)return;stopped=true;cancelAnimationFrame(frame);observer.disconnect();for(const name of ['wheel','touchstart','pointerdown','keydown','disclosure-interaction'])box.removeEventListener(name,stop);window.removeEventListener('keydown',key);done();};
+ const stop=()=>{if(stopped)return;stopped=true;cancelAnimationFrame(frame);observer.disconnect();for(const name of ['wheel','touchstart','pointerdown','keydown','disclosure-interaction','jump-latest'])box.removeEventListener(name,stop);window.removeEventListener('keydown',key);done();};
  const key=event=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key))stop();};
  const observer=new ResizeObserver(()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(apply);});
  observer.observe(box);for(const child of box.children)observer.observe(child);
- for(const name of ['wheel','touchstart','pointerdown','keydown','disclosure-interaction'])box.addEventListener(name,stop,{passive:true});window.addEventListener('keydown',key);
+ for(const name of ['wheel','touchstart','pointerdown','keydown','disclosure-interaction','jump-latest'])box.addEventListener(name,stop,{passive:true});window.addEventListener('keydown',key);
  apply();frame=requestAnimationFrame(apply);
  return stop;
 }
