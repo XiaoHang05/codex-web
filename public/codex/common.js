@@ -2,7 +2,7 @@ export let csrf='';
 export const browserState={queueDatabase:'codex-web-composer-queue'};
 function login(){location.href='/login?next='+encodeURIComponent(location.pathname+location.search+location.hash);}
 export function notice(message){const box=document.getElementById('notice');if(!box)return;box.textContent=message;box.style.display='block';clearTimeout(box.timer);box.timer=setTimeout(()=>box.style.display='none',7000);}
-export async function session(signal){const response=await fetch('/codex-api/v1/auth/status',{signal});if(!response.ok)throw Error('无法读取登录状态');const info=await response.json();if(!info.authenticated){login();throw Error('请登录');}csrf=info.csrf;return info;}
+export async function session(signal){const response=await fetch('/codex-api/v1/auth/status',{signal});if(!response.ok)throw Error('无法读取登录状态');const info=await response.json();if(!info.authenticated){login();throw Error('请登录');}csrf=info.csrf;browserState.localAccess=info.accessKind==='local'||info.accessKind===undefined&&info.local===true;return info;}
 export async function api(url,body,method='POST',signal){
   if(!url.startsWith('/codex-api/v1/'))throw Error('请求超出 Codex Web 接口边界');
   const response=await fetch(url,body===undefined?{signal}:{signal,method,headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(body)});

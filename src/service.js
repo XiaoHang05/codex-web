@@ -13,6 +13,7 @@ import {inlineQuestionsRoute} from './inline-questions.js';
 import {composerQueueRoute} from './composer-queue-native.js';
 import {composerPredictionsRoute} from './composer-predictions.js';
 import {artifacts} from './artifacts.js';
+import {LocalFileTickets} from './local-files.js';
 import {feedback} from './feedback.js';
 import {windowsSandbox} from './windows-sandbox.js';
 import {conversationCommands} from './conversation-commands.js';
@@ -42,6 +43,7 @@ export async function createCodexWeb(options) {
   const notifications={enqueue(event,...args){if(event.source==='codex'&&!projectNotifications.allowed(event.cwd))return;return notificationSink.enqueue(event,...args);}};
   const codex=options.services?.codex||new CodexManager(options.config,emit,notifications,preferences);
   const ctx={config:options.config,save:options.save,auth:options.auth,preferences,codex,notifications,projectNotifications,emit,paths,privateRoots:options.privateRoots||[],...disabledDesktop()};
+  ctx.localFiles=new LocalFileTickets(paths.dataDirectory);
   if(options.desktopAdapter)ctx.desktopAdapter=options.desktopAdapter;
   else if(options.config.desktop?.enabled===true){
     const {createDesktopAdapter}=await import('../adapters/desktop/index.js');

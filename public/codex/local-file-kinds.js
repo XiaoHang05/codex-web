@@ -1,0 +1,1 @@
+export const nativeFileExtensions=new Set('.pdf .txt .md .markdown .log .json .jsonc .csv .tsv .yaml .yml .toml .xml .png .jpg .jpeg .webp .gif .avif .bmp .tif .tiff .heic .doc .docx .xls .xlsx .ppt .pptx .odt .ods .odp .rtf .mp3 .wav .flac .m4a .mp4 .mkv .mov .avi .webm .html .htm'.split(' '));

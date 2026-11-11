@@ -1,0 +1,8 @@
+.artifact-page{display:block;margin:0;height:100dvh;overflow:hidden}
+.artifact-page .artifact-panel{inset:0;width:100%;max-width:none;height:100%;border:0;border-radius:0;box-shadow:none;transition:none}
+.artifact-page .artifact-scrim,.artifact-page .artifact-expand{display:none}
+.artifact-page .artifact-content{padding:24px max(20px,calc((100vw - 1200px)/2))}
+.artifact-page .pdf-preview{height:100%;min-height:0}
+.artifact-page .preview-image{display:flex;width:100%;min-height:100%;align-items:center;justify-content:center}
+.artifact-page #file-status{padding:24px;overflow-wrap:anywhere}
+@media(max-width:760px){.artifact-page .artifact-content{padding:14px}.artifact-page .artifact-panel>header{padding:12px;gap:8px}}
