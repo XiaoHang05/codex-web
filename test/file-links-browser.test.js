@@ -23,7 +23,7 @@ test('ordinary conversation links preview external JSONL files and retain downlo
     const call=manager.call.bind(manager);
     manager.call=async(instance,method,params)=>{
       const result=await call(instance,method,params);
-      if(method==='thread/read'&&result.thread?.id===thread.id){result.thread.turns[0].items[1].text=`[正式预约全过程](<${file}>)\n\n[文件 URL](<file://${file}>)\n\n[日志行号](${encodeURI(file)}:2:1)`;}
+      if(method==='thread/read'&&result.thread?.id===thread.id){const linkPath=file.replaceAll('\\','/');result.thread.turns[0].items[1].text=`[正式预约全过程](<${linkPath}>)\n\n[文件 URL](<file://${linkPath}>)\n\n[日志行号](${encodeURI(file)}:2:1)`;}
       return result;
     };
     browser=await chromium.launch({executablePath:process.env.CHROMIUM_BIN,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
@@ -34,7 +34,8 @@ test('ordinary conversation links preview external JSONL files and retain downlo
       await page.setViewportSize({width,height:850});await page.goto(target.href);
       for(const label of ['正式预约全过程','文件 URL','日志行号']){
         const link=page.locator('.message:not(.user) a').filter({hasText:label});await link.waitFor();await link.click();
-        const preview=page.locator('.artifact-panel.open .text-preview');await preview.waitFor();assert.equal(await preview.textContent(),bytes);
+        const preview=page.locator('.artifact-panel.open .text-preview');
+        await preview.waitFor({timeout:10000}).catch(async error=>{console.error(JSON.stringify({width,label,href:await link.getAttribute('href'),preview:await page.locator('.artifact-content').innerText()}));throw error;});assert.equal(await preview.textContent(),bytes);
         assert.equal(await page.locator('.artifact-panel.open a.artifact-download').getAttribute('download'),path.basename(file));
         assert.equal(await page.locator('.artifact-panel.open a.artifact-download').isVisible(),true);
         if(width===1280&&label==='正式预约全过程'){

@@ -91,7 +91,7 @@ test('conversation Markdown links open external logs without granting unrelated 
   const base='/codex-api/v1/artifacts/web%3Adefault/'+threadId;
   const endpoint=(target,suffix='')=>base+'?path='+encodeURIComponent(target)+suffix;
   assert.equal((await request(endpoint(file))).response.status,403);
-  const text=`[预约日志](<${file}>)\n[私有文件](${privateFile})`;
+  const text=`[预约日志](<${file.replaceAll('\\','/')}>)\n[私有文件](<${privateFile.replaceAll('\\','/')}>)`;
   const send=await request('/codex-api/v1/codex/default/rpc',{method:'POST',body:{method:'turn/start',params:{threadId,input:[{type:'text',text}]}}});assert.equal(send.response.status,200);
   const preview=await request(endpoint(file));assert.equal(preview.response.status,200);assert.equal(preview.value.text,bytes);
   for(const suffix of ['&download=1','&open=1'])assert.equal((await request(endpoint(file,suffix))).value,bytes);

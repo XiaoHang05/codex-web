@@ -1,4 +1,6 @@
 export function isArtifactLink(value){
+  if(typeof value!=='string')return false;
+  try{value=decodeURIComponent(value);}catch{}
   return !!value&&(/^(?:[a-zA-Z]:[\\/]|file:)/i.test(value)||! /^(?:[a-z][a-z0-9+.-]*:|#|\?)/i.test(value));
 }
 export function normalizeArtifactPath(value){
