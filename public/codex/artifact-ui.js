@@ -10,7 +10,7 @@ const openOptions=document.createElement('div');openOptions.className='artifact-
 const openBrowser=document.createElement('a');openBrowser.textContent='浏览器打开';openBrowser.target='_blank';openBrowser.rel='noopener noreferrer';openBrowser.onclick=()=>{openFile.open=false;};
 const openNative=document.createElement('button');openNative.type='button';openNative.textContent='默认程序打开';
 const openError=document.createElement('p');openError.setAttribute('role','status');openError.hidden=true;
-openOptions.append(openBrowser,openNative,openError);openFile.append(openLabel,openOptions);panel.querySelector('.artifact-download').before(openFile);
+openOptions.append(openBrowser,openNative,openError);openFile.append(openLabel,openOptions);panel.querySelector('a.artifact-download').before(openFile);
 document.addEventListener('pointerdown',event=>{if(!openFile.contains(event.target))openFile.open=false;});
 const viewer=imageViewer();
 document.body.append(scrim,panel);let request=0,lastFocus;
@@ -28,7 +28,7 @@ export async function preview(path,context){
   const requestedPath=path;
   path=normalizeArtifactPath(path);
   openFile.hidden=true;openFile.open=false;openError.hidden=true;openBrowser.removeAttribute('href');openNative.onclick=null;
-  const version=++request;lastFocus=document.activeElement;const content=panel.querySelector('.artifact-content'),download=panel.querySelector('.artifact-download');download.hidden=true;download.removeAttribute('href');content.classList.remove('artifact-empty');content.textContent='正在读取…';panel.querySelector('.artifact-name').textContent=String(path).split(/[\\/]/).at(-1);panel.classList.add('open');panel.inert=false;scrim.hidden=false;panel.querySelector('.artifact-close').focus();
+  const version=++request;lastFocus=document.activeElement;const content=panel.querySelector('.artifact-content'),download=panel.querySelector('a.artifact-download');download.hidden=true;download.removeAttribute('href');content.classList.remove('artifact-empty');content.textContent='正在读取…';panel.querySelector('.artifact-name').textContent=String(path).split(/[\\/]/).at(-1);panel.classList.add('open');panel.inert=false;scrim.hidden=false;panel.querySelector('.artifact-close').focus();
   const scope=context.mode==='desktop'?'desktop':'web:'+context.profile;const url=`/codex-api/v1/artifacts/${encodeURIComponent(scope)}/${encodeURIComponent(context.threadId)}?path=${encodeURIComponent(path)}`;
   try{const result=await api(url);if(version!==request)return;content.replaceChildren();panel.querySelector('.artifact-name').textContent=result.name;download.href=url+'&download=1';download.download=result.name;download.setAttribute('aria-label','下载 '+result.name);download.hidden=false;
     if(standalone)document.title=result.name+' · Codex';

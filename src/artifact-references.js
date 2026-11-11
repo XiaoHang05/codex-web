@@ -1,12 +1,22 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline';
-import {fileCitations} from '../public/codex/file-citations.js';
-import {normalizeArtifactPath} from '../public/codex/artifact-path.js';
+import {Marked} from '../public/codex/vendor/marked.js';
+import {fileCitationExtension} from '../public/codex/file-citations.js';
+import {isArtifactLink,normalizeArtifactPath} from '../public/codex/artifact-path.js';
+
+const markdown=new Marked({extensions:[fileCitationExtension]});
 
 export function citedFile(item,cwd,resolved){
   const text=[typeof item.text==='string'?item.text:'',...(Array.isArray(item.content)?item.content:[]).map(part=>part?.text||part?.inputText||'')].join('\n');
-  return fileCitations(text).some(citation=>path.resolve(cwd,normalizeArtifactPath(citation.path))===resolved);
+  let cited=false;
+  // Match links with the same Markdown lexer used by the UI, including reference
+  // links and escaped destinations. Code examples and images grant no access.
+  markdown.walkTokens(markdown.lexer(text),token=>{
+    const destination=token.type==='fileCitation'?token.path:token.type==='link'&&isArtifactLink(token.href)?token.href:null;
+    if(destination&&path.resolve(cwd,normalizeArtifactPath(destination))===resolved)cited=true;
+  });
+  return cited;
 }
 export async function webFileCitation(codex,profile,thread,cwd,resolved){
   const instance=codex.instances.get(profile);if(!instance)return false;

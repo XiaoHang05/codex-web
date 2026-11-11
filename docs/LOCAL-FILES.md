@@ -2,6 +2,10 @@
 
 The preview header has one **打开** menu. **浏览器打开** opens the authorized original file in a new tab. PDF uses the browser PDF viewer directly; images and text use native browser rendering. HTML is delivered inline with a restrictive sandbox CSP. Word and unsupported formats use the existing full-page preview instead of downloading or executing content. Unsupported previews retain the existing download action.
 
+JSON Lines (`.jsonl`) logs use the existing plain-text preview and its size limit.
+
+Files inside the conversation working directory can be previewed directly. For files outside it, an explicit file citation or an ordinary local Markdown link in that same conversation authorizes exactly its destination. Inline links, reference-style links, encoded paths and line-number suffixes use the same Markdown parser and path normalization as the UI. Existing conversations work without regenerating replies; cached replies, live replies and native history use the same check. Plain path text, links shown inside code examples, images, remote URLs and links in a different conversation do not grant access. Private directories, credential files and symlinks into private storage remain blocked, including when explicitly linked. Preview, download and browser opening share this authorization. Linking an index document does not grant access to its entire directory or automatically authorize files linked inside the document.
+
 Compatible HTTP additions:
 
 - Artifact JSON responses add `open: {browser, native}`. Existing preview fields remain unchanged. `browser` indicates original-byte browser rendering support; `native` also requires a local client, an installed handler and a supported document/media extension.
@@ -21,3 +25,11 @@ Install once from this checkout using a PowerShell terminal, with the actual loc
 The installer registers only the current user's `codex-local-file` URL scheme and creates `local-file-open.json` in private data. It backs up an existing registration and marker, refuses to replace a different handler, and does not restart browsers or services or change default application associations. Retain this checkout path, or reinstall explicitly after moving it. The browser may show its standard external-application confirmation on first use.
 
 `windows-file-open.ps1 -BaseUrl ... -Uri ... -PlanOnly` executes the authentication and one-time consumption flow and prints the resolved ShellExecute plan without launching a desktop app. Automated tests use only disposable files and isolated service instances.
+
+The optional real-browser regression uses an existing Playwright installation and Chromium without adding production dependencies:
+
+```sh
+PLAYWRIGHT_MODULE=/absolute/path/to/playwright/index.mjs CHROMIUM_BIN=/absolute/path/to/chromium node --test test/file-links-browser.test.js
+```
+
+It starts an isolated fixture service, opens ordinary external JSONL links at desktop and narrow widths, and verifies file contents and the download action. Without these environment variables, the browser regression is explicitly skipped; HTTP and parser regressions still run.

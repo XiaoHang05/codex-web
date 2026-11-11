@@ -29,6 +29,8 @@ node --env-file=.env src/standalone.js
 
 公网访问需由自有 HTTPS 反向代理回源到回环端口，并配置 `CODEX_WEB_PUBLIC_ORIGIN`。代理须保留公网 Host、设置 `X-Forwarded-Proto: https`，并禁用事件流缓冲。严格的 Host、Origin、Cookie、CSRF 和原生审批检查保持开启。请先在本机 `/codex/access.html` 设置网站密码，可再注册通行密钥。网站登录与 Codex 账号登录是两套独立凭据。
 
+文件预览支持对话中的普通 Markdown 文件链接，包括项目目录外明确链接的日志、报告和索引文件；历史回复无需重新生成。预览、下载与打开共用同一访问校验，私有目录和凭据文件仍拒绝访问。具体范围与打开方式见 [文件预览与打开](docs/LOCAL-FILES.md)。
+
 ## 桌面共享
 
 默认配置是 `desktop.enabled: false`，关闭时不加载桌面适配器、不连接命名管道、不读取桌面历史。

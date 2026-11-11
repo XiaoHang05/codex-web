@@ -84,6 +84,27 @@ test('artifact access checks the configured private directory and original bytes
   assert.equal((await request(base+'?path='+encodeURIComponent(path.join(data,'auth.json')))).response.status,403);
   assert.equal((await request(base+'?path='+encodeURIComponent(path.join(os.tmpdir(),'unreferenced.txt')))).response.status,404);
 });
+test('conversation Markdown links open external logs without granting unrelated or private files',async()=>{
+  const directory=path.join(temporary,'log-records');fs.mkdirSync(directory);
+  const file=path.join(directory,'booking (complete).jsonl'),unrelated=path.join(directory,'unrelated.txt'),privateFile=path.join(data,'protected.txt');
+  const bytes='{"event":"fixture-booking-complete"}\n{"event":"fixture-summary"}\n';fs.writeFileSync(file,bytes);fs.writeFileSync(unrelated,'not cited');fs.writeFileSync(privateFile,'fixture private');
+  const base='/codex-api/v1/artifacts/web%3Adefault/'+threadId;
+  const endpoint=(target,suffix='')=>base+'?path='+encodeURIComponent(target)+suffix;
+  assert.equal((await request(endpoint(file))).response.status,403);
+  const text=`[预约日志](<${file}>)\n[私有文件](${privateFile})`;
+  const send=await request('/codex-api/v1/codex/default/rpc',{method:'POST',body:{method:'turn/start',params:{threadId,input:[{type:'text',text}]}}});assert.equal(send.response.status,200);
+  const preview=await request(endpoint(file));assert.equal(preview.response.status,200);assert.equal(preview.value.text,bytes);
+  for(const suffix of ['&download=1','&open=1'])assert.equal((await request(endpoint(file,suffix))).value,bytes);
+  assert.equal((await request(endpoint(unrelated))).response.status,403);
+  assert.equal((await request(endpoint(privateFile))).response.status,403);
+  const other=await request('/codex-api/v1/codex/default/rpc',{method:'POST',body:{method:'thread/start',params:{cwd:workspace}}});
+  assert.equal((await request('/codex-api/v1/artifacts/web%3Adefault/'+other.value.thread.id+'?path='+encodeURIComponent(file))).response.status,403);
+  if(process.platform!=='win32'){
+    const alias=path.join(directory,'alias.txt');fs.symlinkSync(privateFile,alias);
+    const linked=await request('/codex-api/v1/codex/default/rpc',{method:'POST',body:{method:'turn/start',params:{threadId,input:[{type:'text',text:`[文件](${alias})`}]}}});assert.equal(linked.response.status,200);
+    assert.equal((await request(endpoint(alias))).response.status,403,'linked symlinks cannot expose private storage');
+  }
+});
 test('SSE streams authenticated fixture completion events',async()=>{
   const response=await fetch(new URL('/codex-api/v1/events',running.url),{headers:{cookie}});assert.equal(response.status,200);
   const reader=response.body.getReader(),first=await reader.read();assert.match(new TextDecoder().decode(first.value),/event: ready/);

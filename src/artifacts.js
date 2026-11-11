@@ -3,7 +3,7 @@ import {userContent} from '../public/codex/user-content.js';
 import {citedFile,desktopFileCitation,webFileCitation} from './artifact-references.js?v=1';
 import {localClient} from './local-files.js';
 const imageTypes={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.gif':'image/gif','.avif':'image/avif'};
-const textTypes=new Set(['.md','.markdown','.txt','.log','.json','.jsonc','.csv','.tsv','.js','.mjs','.ts','.tsx','.jsx','.css','.html','.htm','.py','.ps1','.cmd','.bat','.yaml','.yml','.toml','.xml','.tex','.sql','.rs','.go','.java','.c','.cpp','.h','.sh']);
+const textTypes=new Set(['.md','.markdown','.txt','.log','.jsonl','.json','.jsonc','.csv','.tsv','.js','.mjs','.ts','.tsx','.jsx','.css','.html','.htm','.py','.ps1','.cmd','.bat','.yaml','.yml','.toml','.xml','.tex','.sql','.rs','.go','.java','.c','.cpp','.h','.sh']);
 function within(root,file){const relative=path.relative(root,file);return !relative.startsWith('..'+path.sep)&&relative!=='..'&&!path.isAbsolute(relative);}
 export async function resolveArtifact(scope,thread,requested,ctx){
   let cwd,turns;
@@ -16,7 +16,7 @@ export async function resolveArtifact(scope,thread,requested,ctx){
   const reference=(turns||[]).flatMap(turn=>turn.items||[]).some(item=>item.type==='imageView'&&path.resolve(cwd,item.path||item.filePath||item.file_path||'')===resolved||item.type==='userMessage'&&userContent(item.text||(item.content||[]).map(part=>part.text||part.inputText||'').join('\n'),item).images.some(image=>!image.startsWith('data:')&&path.resolve(cwd,image)===resolved))||scope==='desktop'&&!within(root,real)&&Object.hasOwn(imageTypes,path.extname(real).toLowerCase())&&await ctx.desktopAdapter?.imageReference(ctx.history,thread,cwd,resolved);
   if(!within(root,real)&&!(reference&&Object.hasOwn(imageTypes,path.extname(real).toLowerCase()))){
     const cited=(turns||[]).flatMap(turn=>turn.items||[]).some(item=>['userMessage','agentMessage','assistantMessage'].includes(item.type)&&citedFile(item,cwd,resolved))||(scope==='desktop'?await desktopFileCitation(ctx.history,thread,cwd,resolved):await webFileCitation(ctx.codex,scope.slice(4),thread,cwd,resolved));
-    if(!cited)throw fault('只能访问此会话工作目录或明确引用的文件',403);
+    if(!cited)throw fault('此文件不在当前项目中，也没有出现在本次对话的文件链接里',403);
   }
   const relative=path.relative(root,real).replaceAll('\\','/');if(/(^|\/)(\.codex|\.dsh|\.git|node_modules|migration-backup)(\/|$)|(^|\/)hub\/data(\/|$)|runtime\/caddy\/data(\/|$)/i.test(relative)||/(^|\/)(\.env(?:\..*)?|auth\.json|.*(?:secret|credential|passkey|private[-_]?key|cookie|token).*)$/i.test(relative))throw fault('该文件不提供预览',403);
   const stat=fs.statSync(real);if(!stat.isFile())throw fault('只能预览文件');
