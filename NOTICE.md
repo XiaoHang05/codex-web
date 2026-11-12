@@ -7,6 +7,7 @@ The interface was implemented separately from the native desktop client. Earlier
 Bundled browser libraries retain their upstream license files:
 
 - Marked: `public/codex/vendor/marked-LICENSE.md`
+- marked-cjk-friendly 0.1.3 (emphasis tokenizer only): `public/codex/vendor/marked-cjk-friendly-LICENSE.md`; upstream https://github.com/tats-u/markdown-cjk-friendly, npm archive integrity `sha512-9X5zELpCKopA6rLlNWk/f1swkRUvuuO4DedM48V0OBABaEEy520WEBYY5bdLd7GDEaqzZuTofBxgzr32/4rWFw==`. The bundled JavaScript is the unchanged package `dist/index.js`.
 - DOMPurify: `public/codex/vendor/purify-LICENSE`
 - KaTeX and its font notices: `public/codex/vendor/katex/`
 

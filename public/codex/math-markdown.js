@@ -1,6 +1,7 @@
 import {Marked} from './vendor/marked.js';
 import katex from './vendor/katex/katex.mjs';
 import {fileCitationExtension} from './file-citations.js';
+import markedCjkFriendly from './vendor/marked-cjk-friendly.js';
 
 // Tokenize before Markdown consumes formula backslashes and underscores.
 // Code spans and fenced blocks stay under Marked's normal code tokenizers.
@@ -23,6 +24,8 @@ function formula(source) {
 const escape=text=>text.replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const placeholder=token=>`<span class="math-source" data-math-display="${token.display}">${escape(token.text)}</span>`;
 export const marked=new Marked({tokenizer:{
+  // Enable CJK-aware emphasis boundaries; keep native strikethrough tokenization.
+  emStrong:markedCjkFriendly().tokenizer.emStrong,
   lheading(source){
     // Marked checks setext headings before it applies block-extension starts.
     // A standalone '=' inside display math must not turn preceding text into a heading.

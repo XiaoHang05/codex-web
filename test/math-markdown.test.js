@@ -49,12 +49,13 @@ test('ordinary setext headings and literal code keep their Markdown meaning',()=
 });
 
 const browserAvailable=process.env.PLAYWRIGHT_MODULE&&process.env.CHROMIUM_BIN;
-test('display equations render through sanitization and KaTeX in desktop and narrow browsers',{
+test('display equations and Chinese emphasis render through sanitization and KaTeX in desktop and narrow browsers',{
   skip:!browserAvailable&&'Set PLAYWRIGHT_MODULE and CHROMIUM_BIN for the real browser regression',timeout:60000,
 },async()=>{
   const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE).href);
   const assets=path.resolve(process.env.CODEX_MATH_ASSETS||fileURLToPath(new URL('../public/codex/',import.meta.url)));
   const browser=await chromium.launch({executablePath:process.env.CHROMIUM_BIN,headless:true});
+  const chinese=fs.readFileSync(new URL('./fixtures/cjk-emphasis.md',import.meta.url),'utf8');
   const content=`勾股关系：\n\\[\n${boxed}\n\\]\n右边非负。\n\nDollar display:\n$$\n${boxed}\n$$\n\nTitle\n===\n\n\`\\[literal\\]\`\n\nInline \\(a=b\\) and $c=d$.`;
   try{
     for(const width of [1280,390]){
@@ -96,8 +97,26 @@ test('display equations render through sanitization and KaTeX in desktop and nar
           return math.scrollLeft>0;
         }),true);
       }
+      await page.evaluate(async content=>{
+        const {marked,renderMath}=await import('/codex/math-markdown.js');
+        const {default:DOMPurify}=await import('/codex/vendor/purify.js');
+        const root=document.createElement('article');root.id='cjk';document.body.append(root);
+        root.innerHTML=DOMPurify.sanitize(marked.parse(content),{USE_PROFILES:{html:true},FORBID_TAGS:['img','style','form','input','button','iframe'],FORBID_ATTR:['style']});
+        renderMath(root);
+      },chinese);
+      await page.evaluate(()=>document.fonts.ready);
+      assert.equal(await page.locator('#cjk strong').count(),3);
+      const bold=page.locator('#cjk strong').nth(2);
+      assert.match(await bold.innerText(),/^而你求出的和函数在/);
+      assert.match(await bold.innerText(),/确实有右导数。$/);
+      assert.equal(await bold.evaluate(node=>node.nextSibling.textContent.startsWith('所以')),true);
+      assert.equal(await bold.evaluate(node=>Number(getComputedStyle(node).fontWeight)>=600),true);
+      assert.equal(await page.locator('#cjk .katex').count(),6);
+      assert.equal(await page.locator('#cjk .math-error,#cjk .math-source').count(),0);
+      assert.equal((await page.locator('#cjk').innerText()).includes('**'),false);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
       assert.deepEqual(errors,[]);assert.deepEqual(failed,[]);
-      console.log(JSON.stringify({width,formulas:4,boxed:2,pageErrors:errors,failedRequests:failed}));
+      console.log(JSON.stringify({width,formulas:10,boxed:2,chineseBoldSpans:3,pageErrors:errors,failedRequests:failed}));
       await page.close();
     }
   }finally{await browser.close();}
