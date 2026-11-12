@@ -32,10 +32,15 @@ for await(const line of readline.createInterface({input:process.stdin})){
       const thread=threads.get(params.threadId);thread.turns.splice(-params.numTurns);result={thread};break;
     }
     case 'turn/start':{
-      const thread=threads.get(params.threadId),turn={id:'fixture-turn-'+(++sequence),status:'completed',items:[{id:'fixture-user-'+sequence,type:'userMessage',content:params.input},{id:'fixture-answer-'+sequence,type:'agentMessage',text:'Fixture response **ready**.'}]};
+      const thread=threads.get(params.threadId),turn={id:'fixture-turn-'+(++sequence),status:params.fixtureHold?'inProgress':'completed',items:[{id:'fixture-user-'+sequence,type:'userMessage',content:params.input},{id:'fixture-answer-'+sequence,type:'agentMessage',text:'Fixture response **ready**.'}]};
       if(!thread){send({id,error:{message:'Unknown fixture thread'}});continue;}
       thread.turns.push(turn);result={turn};
-      setTimeout(()=>{send({method:'turn/started',params:{threadId:thread.id,turn:{...turn,status:'inProgress'}}});send({method:'item/completed',params:{threadId:thread.id,turnId:turn.id,item:turn.items[1]}});send({method:'turn/completed',params:{threadId:thread.id,turn}});},10);break;
+      setTimeout(()=>{send({method:'turn/started',params:{threadId:thread.id,turn:{...turn,status:'inProgress'}}});send({method:'item/completed',params:{threadId:thread.id,turnId:turn.id,item:turn.items[1]}});if(!params.fixtureHold)send({method:'turn/completed',params:{threadId:thread.id,turn}});},10);break;
+    }
+    case 'turn/interrupt':{
+      const thread=threads.get(params.threadId),turn=thread?.turns.at(-1);
+      if(!turn||turn.id!==params.turnId||turn.status!=='inProgress'){send({id,error:{message:'Fixture active turn changed'}});continue;}
+      setTimeout(()=>{turn.status='interrupted';send({method:'turn/completed',params:{threadId:thread.id,turn}});},30);result={};break;
     }
     default:send({id,error:{code:-32601,message:'Method not supported by fixture'}});continue;
   }

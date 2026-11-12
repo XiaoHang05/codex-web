@@ -1,6 +1,6 @@
 import {userContent} from './user-content.js';
 
-export function lastMessageEdit(turns=[]){
+export function lastMessageEdit(turns=[],{allowRunning=false}={}){
  const turn=turns.at(-1),turnId=turn?.turnId||turn?.id;
  if(!turnId)return {editable:false,reason:'没有可修改的消息'};
  const users=(turn.items||[]).filter(item=>['userMessage','steeringUserMessage','steered'].includes(item.type));
@@ -8,8 +8,9 @@ export function lastMessageEdit(turns=[]){
  const item=users[0],input=turn.params?.input||item.content||[{type:'text',text:item.text||''}];
  const raw=input.map(part=>part.text||part.inputText||'').filter(Boolean).join('\n');
  const parsed=userContent(raw,{content:input});
- if(!['completed','interrupted','failed'].includes(turn.status?.type||turn.status))return {editable:false,turnId,reason:'请等待当前任务结束'};
- return {editable:true,turnId,itemId:item.id,text:parsed.text,attachmentCount:input.filter(part=>part.type!=='text').length};
+ const status=turn.status?.type||turn.status,running=['inProgress','in_progress','running'].includes(status);
+ if(!['completed','interrupted','failed'].includes(status)&&!(allowRunning&&running))return {editable:false,turnId,reason:'请等待当前任务结束'};
+ return {editable:true,turnId,itemId:item.id,text:parsed.text,attachmentCount:input.filter(part=>part.type!=='text').length,running};
 }
 
 export function replaceMessageText(input,message){

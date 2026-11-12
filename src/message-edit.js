@@ -1,5 +1,6 @@
 import path from 'node:path';
 import {createHash} from 'node:crypto';
+import {setTimeout as delay} from 'node:timers/promises';
 import {fault,readJson,writeJson} from './storage.js';
 import {ensureComposerQueue} from './composer-queue-native.js';
 import {queueTarget} from './composer-queue.js';
@@ -17,12 +18,14 @@ async function inspect(ctx,queue,target){
  }
  if(queue.state(target.scope).items.length)throw fault('请先处理发送队列，再修改最后一条消息',409);
  const snapshot=await queue.adapter.snapshot(target);
- if(snapshot.busy)throw fault('请等待当前任务和审批结束，再修改消息',409);
  let turns;
  if(target.mode==='desktop')turns=desktopTurns(ctx.desktop.states.get(target.threadId));
  else turns=(await ctx.codex.rpc(target.profile,'thread/read',{threadId:target.threadId,includeTurns:true})).thread?.turns;
- const edit=lastMessageEdit(turns);
+ const edit=lastMessageEdit(turns,{allowRunning:true});
  if(!edit.editable)throw fault(edit.reason,409);
+ const instance=ctx.codex.instances?.get(target.profile),state=ctx.desktop.states.get(target.threadId);
+ const pending=target.mode==='desktop'?(state?.requests||[]).some(r=>r.completed!==true&&r.request?.completed!==true):[...instance?.approvals.values()||[]].some(r=>r.params?.threadId===target.threadId);
+ if(pending||snapshot.busy&&!(edit.running&&snapshot.activeId===edit.turnId&&!instance?.turnStarting))throw fault('请等待任务启动和待处理审批结束，再修改消息',409);
  const turn=turns.at(-1),item=(turn.items||[]).find(item=>item.type==='userMessage');
  const input=turn.params?.input||item.content||[{type:'text',text:item.text||''}];
  const revision=hash(JSON.stringify({identity,turnId:edit.turnId,input}));
@@ -31,7 +34,7 @@ async function inspect(ctx,queue,target){
 
 async function webEdit(ctx,target,current,message,submitted){
  const manager=ctx.codex,instance=await manager.start(target.profile);
- if(instance.active.has(target.threadId)||instance.turnStarting||instance.accountOperationBusy||instance.authPending||instance.sandboxSetupPending||instance.sandboxNeedsRestart)throw fault('实例状态已变化，请稍后重新修改',409);
+ if(instance.active.has(target.threadId)&&(!current.running||instance.active.get(target.threadId)!==current.turnId)||instance.turnStarting||instance.accountOperationBusy||instance.authPending||instance.sandboxSetupPending||instance.sandboxNeedsRestart)throw fault('实例状态已变化，请稍后重新修改',409);
  instance.messageEditBusy??=new Set();
  if(instance.messageEditBusy.has(target.threadId))throw fault('此消息正在修改',409);
  const input=replaceMessageText(current.input,message);
@@ -44,9 +47,24 @@ async function webEdit(ctx,target,current,message,submitted){
   if(!instance.loaded.has(target.threadId))await manager.rpcUnlocked(target.profile,'thread/resume',{threadId:target.threadId});
   // Recheck after any resume/configuration reads and before destructive history work.
   const check=(await manager.rpcUnlocked(target.profile,'thread/read',{threadId:target.threadId,includeTurns:true})).thread;
-  const latest=lastMessageEdit(check?.turns);
+  const latest=lastMessageEdit(check?.turns,{allowRunning:true});
   const requests=[...instance.approvals.values()].some(request=>request.params?.threadId===target.threadId);
-  if(!latest.editable||latest.turnId!==current.turnId||instance.active.has(target.threadId)||requests)throw fault('会话状态已变化，请刷新后重新修改',409);
+  if(!latest.editable||latest.turnId!==current.turnId||latest.text!==current.text||requests)throw fault('会话状态已变化，请刷新后重新修改',409);
+  if(latest.running){
+   if(!current.running||instance.active.get(target.threadId)!==current.turnId)throw fault('运行中的轮次已变化，请重新打开修改',409);
+   submitted();
+   await manager.call(instance,'turn/interrupt',{threadId:target.threadId,turnId:current.turnId});
+   const deadline=Date.now()+10000;
+   while(true){
+    const stopped=(await manager.rpcUnlocked(target.profile,'thread/read',{threadId:target.threadId,includeTurns:true})).thread;
+    const last=lastMessageEdit(stopped?.turns,{allowRunning:true});
+    if(!last.editable||last.turnId!==current.turnId||last.text!==current.text)throw fault('停止期间消息已变化，未重新生成',409);
+    if(!last.running&&!instance.active.has(target.threadId))break;
+    if(Date.now()>=deadline)throw fault('当前生成尚未确认停止，未重新生成',409);
+    await delay(100);
+   }
+  }else if(instance.active.has(target.threadId))throw fault('会话仍在执行，请稍后重试',409);
+  if([...instance.approvals.values()].some(r=>r.params?.threadId===target.threadId))throw fault('审批状态已变化，未重新生成',409);
   submitted();
   try{await manager.call(instance,'thread/revert',{threadId:target.threadId,beforeTurnId:current.turnId});}
   catch(error){
@@ -73,7 +91,8 @@ export async function messageEditRoute(req,res,ctx){
   }
   if(!id(body.requestId)||!id(body.turnId)||typeof body.revision!=='string'||!/^[a-f0-9]{64}$/.test(body.revision)||typeof body.message!=='string'||!body.message.trim()||body.message.length>200000)throw fault('无效的消息修改参数');
   const directory=messageEditDirectory(target.scope),file=path.join(directory,body.requestId+'.json'),latestFile=path.join(directory,'latest.json');
-  const digest=hash(JSON.stringify({identity,...target,turnId:body.turnId,revision:body.revision,message:body.message}));
+  if(body.interruptRunning!==undefined&&typeof body.interruptRunning!=='boolean')throw fault('无效的停止确认参数');
+  const digest=hash(JSON.stringify({identity,...target,turnId:body.turnId,revision:body.revision,message:body.message,...(body.interruptRunning?{interruptRunning:true}:{})}));
   const previous=readJson(file,null);
   if(previous){
    if(previous.digest!==digest)throw fault('修改请求编号已被使用',409);
@@ -85,6 +104,7 @@ export async function messageEditRoute(req,res,ctx){
   const current=await inspect(ctx,queue,target);
   if(current.turnId!==body.turnId||current.revision!==body.revision)throw fault('消息或会话状态已变化，请重新打开修改',409);
   if(body.message===current.text)throw fault('消息内容尚未修改');
+  if(current.running&&body.interruptRunning!==true)throw fault('本轮正在处理，请确认停止后重新生成',409);
   const receipt={requestId:body.requestId,scope:target.scope,turnId:current.turnId,digest,status:'saved',createdAt:new Date().toISOString(),originalTurn:current.turn};
   const save=status=>{receipt.status=status;writeJson(file,receipt);writeJson(latestFile,{requestId:body.requestId,turnId:current.turnId,status});};
   save('saved');
@@ -92,7 +112,7 @@ export async function messageEditRoute(req,res,ctx){
    let native;
    if(target.mode==='desktop'){
     if(!ctx.desktopAdapter.editLastMessage)throw fault('当前桌面适配器未提供消息修改能力',409);
-    save('submitted');native=await ctx.desktopAdapter.editLastMessage(target.threadId,{turnId:current.turnId,message:body.message});recordMessageRevert(ctx,target,current.turnId);
+    save('submitted');native=await ctx.desktopAdapter.editLastMessage(target.threadId,{turnId:current.turnId,message:body.message,...(current.running?{interruptRunning:true}:{})});recordMessageRevert(ctx,target,current.turnId);
    }else native=await webEdit(ctx,target,current,body.message,()=>save('submitted'));
    const result={ok:true,requestId:body.requestId,replacedTurnId:current.turnId,...(native?.turn?{turn:native.turn}:{})};
    receipt.result=result;save('accepted');

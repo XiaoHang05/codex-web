@@ -1,7 +1,7 @@
 # Edit the last user message
 
 The pencil beside Copy is available for the original user message in the latest
-terminal turn. Running turns, approval requests, queued messages, archived or
+terminal or running turn. Approval requests, queued messages, archived or
 foreign-account sessions, protected desktop chats, and turns containing steering
 or question replies cannot be edited. Older turns do not get this action.
 
@@ -10,15 +10,24 @@ composer draft. Confirm replaces the last turn and starts a new generation with
 the existing attachments and session settings. This does not undo file changes
 or external actions performed by the replaced turn.
 
+For a running turn, opening or cancelling the editor does not stop generation.
+The explicit **停止并重新生成** submission interrupts only that turn, waits for
+confirmed termination, and then performs the same replacement. If the turn has
+already finished, no interrupt is sent. A changed latest turn, a pending approval,
+or an uncertain interrupt outcome prevents history replacement and automatic retry.
+
 ## Additive v1 HTTP interface
 
 `GET /codex-api/v1/message-edit?scope=<scope>` returns
-`{editable:true,turnId,itemId,text,attachmentCount,revision}` for an eligible idle
+`{editable:true,turnId,itemId,text,attachmentCount,revision,running}` for an eligible
 session. The scope is `web:<profile>:<thread>` or `desktop:<thread>`. A stale or
 ineligible session returns 409; authentication and ownership checks apply.
 
 `POST /codex-api/v1/message-edit` accepts
-`{scope,turnId,revision,requestId,message}`. Send the unchanged revision from the
+`{scope,turnId,revision,requestId,message,interruptRunning?}`. A running turn
+requires explicit `interruptRunning: true`; otherwise the request returns 409
+without stopping it. Existing terminal-turn submissions need no new field.
+Send the unchanged revision from the
 preview and a unique requestId for this manual submission. Authentication and
 CSRF checks are mandatory. Success returns
 `{ok:true,requestId,replacedTurnId,turn?}`; desktop acceptance may omit `turn`.
@@ -44,12 +53,18 @@ Desktop sessions use their existing owner connection and
 `thread-follower-edit-last-user-turn` version 2. The owner preserves attachments,
 chooses its supported revert implementation and starts the edited turn. The web
 adapter does not take ownership or call an independent engine for these chats.
+Running desktop edits first use the existing version 4 matched interrupt with
+`expectedTurnId`, then wait for the owner's terminal snapshot before edit version 2.
+Competing controls through this adapter are blocked until the edit finishes.
 
 Web-owned sessions use `thread/revert` with the exact latest turn ID, followed by
 `turn/start` with `turnTrigger: "edit_user_message"`. Only a definite unknown-method
 response permits falling back to legacy `thread/rollback` with `numTurns:1`.
 Neither history-removal method is exposed through generic browser RPC. The
 existing access and approval policy is applied to the new turn.
+Running web edits first issue `turn/interrupt` for the exact target turn and wait
+for both terminal history and the active-turn tracker to agree. The old turn and
+private recovery record remain available if stopping cannot be confirmed.
 
 Edits share the server composer queue's session lock. An additional engine guard
 blocks conflicting sends while web history is being replaced. Private recovery

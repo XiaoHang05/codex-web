@@ -60,3 +60,31 @@ test('replaced desktop turns cannot return through cached raw history pages',asy
  recordMessageRevert({codex:{emit(){}}},{scope:'desktop:history-fixture'},'removed');
  const result=await desktopHistoryPage(history,'history-fixture',{});assert.equal(result.items.length,1);assert.equal(result.items[0].text,'keep');
 });
+
+test('running desktop edit uses matched interrupt v4 before owner edit and blocks competing controls',async()=>{
+ const f=fixture(),state=f.desktop.states.get('fixture-desktop');state.turns[0].status='inProgress';state.threadRuntimeStatus.type='running';
+ const original=f.desktop.send;let enter,release;
+ const entered=new Promise(resolve=>enter=resolve),gate=new Promise(resolve=>release=resolve);
+ f.desktop.send=message=>{if(message.method==='thread-follower-interrupt-turn'){enter();void gate.then(()=>{state.turns[0].status='interrupted';state.threadRuntimeStatus.type='idle';original(message);});}else original(message);};
+ try{
+  const preview=await f.call('GET');assert.equal(preview.running,true);assert.equal(f.sent.length,0);
+  const payload={scope:'desktop:fixture-desktop',turnId:preview.turnId,revision:preview.revision,requestId:'running-desktop-edit',message:'new running message',interruptRunning:true};
+  await assert.rejects(f.call('POST',{...payload,interruptRunning:false}),error=>error.status===409);
+  const editing=f.call('POST',payload);await entered;
+  await assert.rejects(f.desktop.control('fixture-desktop','steer',{input:[]}),error=>error.status===409);
+  const {createDesktopAdapter}=await import('../adapters/desktop/index.js');
+  const adapter=await createDesktopAdapter({},f.ctx,{desktop:f.desktop,history:f.ctx.history});
+  await assert.rejects(adapter.handle({path:'/api/desktop/fixture-desktop/steer',method:'POST',body:{input:[]}}, {},f.ctx),error=>error.status===409);
+  release();assert.equal((await editing).ok,true);
+  assert.deepEqual(f.sent.map(message=>[message.method,message.version]),[['thread-follower-interrupt-turn',4],['thread-follower-edit-last-user-turn',2]]);
+  assert.equal(f.sent[0].params.expectedTurnId,'last-turn');assert.equal(f.sent[1].params.turnId,'last-turn');assert.equal(f.desktop.messageEditBusy.size,0);
+ }finally{release();f.ctx.codex.composerQueue.close();}
+});
+test('a new desktop turn observed after stopping is never edited',async()=>{
+ const f=fixture(),state=f.desktop.states.get('fixture-desktop');state.turns[0].status='inProgress';state.threadRuntimeStatus.type='running';
+ const original=f.desktop.send;f.desktop.send=message=>{if(message.method==='thread-follower-interrupt-turn'){state.turns[0].turnId='new-turn';state.turns[0].status='completed';state.threadRuntimeStatus.type='idle';}original(message);};
+ try{
+  const preview=await f.call('GET');await assert.rejects(f.call('POST',{scope:'desktop:fixture-desktop',turnId:preview.turnId,revision:preview.revision,requestId:'racing-desktop-edit',message:'should not send',interruptRunning:true}),error=>error.status===409);
+  assert.deepEqual(f.sent.map(message=>message.method),['thread-follower-interrupt-turn']);assert.equal(state.turns[0].turnId,'new-turn');assert.equal(f.desktop.messageEditBusy.size,0);
+ }finally{f.ctx.codex.composerQueue.close();}
+});

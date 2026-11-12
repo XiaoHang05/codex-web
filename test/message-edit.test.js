@@ -103,3 +103,46 @@ test('a failed send after reverting never automatically retries and keeps a priv
   assert.equal(record.originalTurn.id,f.preview.turnId);assert.equal(record.status,'uncertain');
  }finally{manager.call=original;}
 });
+
+async function seedRunning(){
+ const {thread}=await manager.rpc('default','thread/start',{});
+ await manager.rpc('default','turn/start',{threadId:thread.id,input:[{type:'text',text:'Earlier message'}]});await delay(20);
+ const input=[{type:'text',text:'Running original'},{type:'image',url:'data:image/png;base64,eA=='}];
+ const old=await manager.rpc('default','turn/start',{threadId:thread.id,input,fixtureHold:true});await delay(20);
+ const scope='web:default:'+thread.id,preview=await request('GET','/message-edit?scope='+scope);
+ assert.equal(preview.status,200,JSON.stringify(preview));assert.equal(preview.body.running,true);
+ return {threadId:thread.id,old,input,payload:{scope,turnId:preview.body.turnId,revision:preview.body.revision,requestId:crypto.randomUUID(),message:'Edited running message',interruptRunning:true}};
+}
+test('running edit previews without stopping, then stops exactly its turn and replaces it once',async()=>{
+ const f=await seedRunning(),original=manager.call,calls=[];
+ manager.call=async function(instance,method,params,...rest){if(params?.threadId===f.threadId)calls.push({method,params});return original.call(this,instance,method,params,...rest);};
+ try{
+  assert.equal((await read(f.threadId)).turns.at(-1).status,'inProgress');
+  assert.equal((await request('POST','/message-edit',{...f.payload,interruptRunning:false})).status,409);assert.equal(calls.some(c=>c.method==='turn/interrupt'),false);
+  const instance=manager.instances.get('default');instance.approvals.set('held-approval',{params:{threadId:f.threadId}});assert.equal((await request('POST','/message-edit',f.payload)).status,409);instance.approvals.delete('held-approval');
+  const [first,duplicate]=await Promise.all([request('POST','/message-edit',f.payload),request('POST','/message-edit',f.payload)]);assert.equal(first.status,200,JSON.stringify(first));assert.deepEqual(duplicate,first);await delay(20);
+  assert.deepEqual(calls.filter(c=>c.method==='turn/interrupt').map(c=>c.params),[{threadId:f.threadId,turnId:f.old.turn.id}]);
+  assert.equal(calls.filter(c=>c.method==='thread/revert').length,1);assert.equal(calls.filter(c=>c.method==='turn/start').length,1);
+  const after=await read(f.threadId);assert.equal(after.turns.length,2);assert.equal(after.turns[0].items[0].content[0].text,'Earlier message');assert.deepEqual(after.turns[1].items[0].content,[{type:'text',text:'Edited running message',text_elements:[]},f.input[1]]);
+ }finally{manager.call=original;}
+});
+test('a running edit that finishes before submission does not interrupt again',async()=>{
+ const f=await seedRunning(),instance=manager.instances.get('default');await manager.call(instance,'turn/interrupt',{threadId:f.threadId,turnId:f.old.turn.id});await delay(60);
+ const original=manager.call;let interrupts=0;manager.call=async function(i,method,params,...rest){if(method==='turn/interrupt'&&params.threadId===f.threadId)interrupts++;return original.call(this,i,method,params,...rest);};
+ try{assert.equal((await request('POST','/message-edit',f.payload)).status,200);assert.equal(interrupts,0);}finally{manager.call=original;}
+});
+test('an ambiguous interrupt never reverts or retries the edit',async()=>{
+ await delay(20);const f=await seedRunning(),original=manager.call;let interrupts=0,reverts=0;
+ manager.call=async function(instance,method,params,...rest){if(params?.threadId===f.threadId){if(method==='turn/interrupt'){interrupts++;throw fault('fixture interrupt response lost',504);}if(method==='thread/revert')reverts++;}return original.call(this,instance,method,params,...rest);};
+ try{assert.equal((await request('POST','/message-edit',f.payload)).status,409);assert.equal((await request('POST','/message-edit',f.payload)).status,409);assert.equal(interrupts,1);assert.equal(reverts,0);assert.equal((await read(f.threadId)).turns.at(-1).id,f.old.turn.id);}finally{manager.call=original;}
+});
+test('a new web turn appearing during stop confirmation is never reverted',async()=>{
+ const f=await seedRunning(),original=manager.call;let reverts=0,newTurn;
+ manager.call=async function(instance,method,params,...rest){
+  if(params?.threadId===f.threadId&&method==='thread/revert')reverts++;
+  const result=await original.call(this,instance,method,params,...rest);
+  if(params?.threadId===f.threadId&&method==='turn/interrupt'){await delay(60);newTurn=await original.call(this,instance,'turn/start',{threadId:f.threadId,input:[{type:'text',text:'New independent turn'}],fixtureHold:true});}
+  return result;
+ };
+ try{assert.equal((await request('POST','/message-edit',f.payload)).status,409);assert.equal(reverts,0);assert.equal((await read(f.threadId)).turns.at(-1).id,newTurn.turn.id);}finally{manager.call=original;}
+});

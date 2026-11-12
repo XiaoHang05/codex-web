@@ -252,8 +252,8 @@ function imageRecord(items,expanded,ongoing=false){const record=document.createE
 const replacedTurns=new Map();
 function render(items){
   const removed=replacedTurns.get(currentQueueScope());if(removed)items=items.filter(item=>!removed.has(item._turnId));
-  const edit=currentMessageEdit(),editableUser=edit.editable?items.findLast(item=>item.type==='userMessage'&&item._turnId===edit.turnId&&!item._steering):null;
   items=withProcessingStatus(items,turnId);
+  const edit=currentMessageEdit(),editableUser=edit.editable?items.findLast(item=>item.type==='userMessage'&&item._turnId===edit.turnId&&!item._steering):null;
   predictions.update(selected?{source:selected.mode,profile,threadId:selected.threadId}:null,items,!!turnId);
   if(renderStreaming.frame){cancelAnimationFrame(renderStreaming.frame);renderStreaming.frame=0;}
   displayedItems=items;const latestByTurn=new Map();for(const item of items)if(item.type!=='userMessage')latestByTurn.set(item._turnId,item);items=items.map(item=>item.type==='reasoning'&&workActive(item)&&latestByTurn.get(item._turnId)!==item?{...item,_running:false,status:'completed'}:item);const scope=inputScope();if(scope){const pending=pendingInputs(scope),remaining=pending.filter(item=>items.filter(native=>native.type==='userMessage'&&text(native).trim()===item.text.trim()).length<=item._baseline);try{sessionStorage.setItem('accepted-inputs:'+scope,JSON.stringify(remaining));}catch{}items=[...items];for(const pendingItem of remaining){const anchor=items.findIndex(item=>item.id===pendingItem._afterItem);items.splice(anchor<0?items.length:anchor+1,0,pendingItem);}}
@@ -348,8 +348,8 @@ function paintImages(){
 function currentQueueScope(){return selected?(selected.mode==='web'?`web:${profile}:${selected.threadId}`:`desktop:${selected.threadId}`):null;}
 function currentTaskControl(){return taskControlState({turns:selected?.mode==='desktop'?desktopTurns(desktopSnapshot):webQuestionTurns,activeTurn:turnId,ready:!!selected&&chatStateReady,blocked:!!selected?.protected||!!selected?.conflict||!!selected?.accountMismatch,pending:sendingTurn||awaitingDesktopStart||queued.length>0||queueDispatching||queuePaused});}
 function currentMessageEdit(){
- const state=lastMessageEdit(selected?.mode==='desktop'?desktopTurns(desktopSnapshot):webQuestionTurns);
- return {...state,editable:state.editable&&!!selected&&chatStateReady&&!turnId&&!sendingTurn&&!awaitingDesktopStart&&!queued.length&&!selected.protected&&!selected.conflict&&!selected.accountMismatch};
+ const state=lastMessageEdit(selected?.mode==='desktop'?desktopTurns(desktopSnapshot):webQuestionTurns,{allowRunning:true});
+ return {...state,editable:state.editable&&!!selected&&chatStateReady&&(!turnId||turnId===state.turnId)&&!sendingTurn&&!awaitingDesktopStart&&!queued.length&&!selected.protected&&!selected.conflict&&!selected.accountMismatch};
 }
 function discardEditedTurn(id){
  if(!id||!currentQueueScope())return;
@@ -359,7 +359,7 @@ function discardEditedTurn(id){
 }
 async function openMessageEdit(item){
  const target=selected,scope=currentQueueScope(),control=currentMessageEdit();
- if(!control.editable||control.turnId!==item._turnId)throw Error('只能修改当前最后一条已结束的用户消息');
+ if(!control.editable||control.turnId!==item._turnId)throw Error('只能修改当前最后一条原始用户消息');
  return editMessageDialog({api,scope,turnId:item._turnId,isCurrent:()=>selected===target&&currentMessageEdit().editable&&currentMessageEdit().turnId===item._turnId,
   onBusy:busy=>{sendingTurn=busy;paintQueue();render(displayedItems);},
   onEdited:async result=>{if(selected!==target)return;discardEditedTurn(result.replacedTurnId);if(target.mode==='web'){if(result.turn?.id){acceptStartedTurn(liveItems,result.turn);turnId=result.turn.status==='completed'?null:result.turn.id;}await read();}else{await refreshDesktopMessages();if(desktopSnapshot)desktopState(desktopSnapshot);}markRecent(target.mode==='desktop'?'desktop':'web:'+profile,target.threadId);}

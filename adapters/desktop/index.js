@@ -63,6 +63,7 @@ export async function createDesktopAdapter(options, ctx, existing) {
       }
       if(req.method!=='POST')throw fault('桌面控制仅支持 POST',405);
       if(action==='follow'){res.json({state:await desktop.follow(threadId)});return true;}
+      if(desktop.messageEditBusy?.has(threadId))throw fault('此会话正在修改消息，请稍候',409);
       let params=req.body||{};
       if(action==='send'){
         const recovery=params.turnTrigger==='resume_interrupted_task';

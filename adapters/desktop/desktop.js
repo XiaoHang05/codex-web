@@ -15,6 +15,8 @@ const versions = new Map([['initialize',0],['thread-follower-compact-thread',1],
 const home = path.join(os.homedir(), '.codex');
 versions.set('thread-follower-edit-last-user-turn',2);
 const queueCapability=Symbol('internal native composer queue');
+const messageEditCapability=Symbol('internal message edit interruption');
+export function interruptEditingTurn(desktop,threadId,turnId){return Desktop.prototype.control.call(desktop,threadId,'interrupt',{expectedTurnId:turnId},messageEditCapability);}
 export function principal(directory = home) {
   const auth = readJson(path.join(directory, 'auth.json'), {});
   const id = auth.tokens?.account_id;
@@ -97,6 +99,7 @@ export class Desktop extends EventEmitter {
   }
   queueControl(threadId,action,params){if(!['queue','removeQueued'].includes(action))throw fault('无效原生队列操作');return this.control(threadId,action,params,queueCapability);}
   async control(threadId,action,params={},capability) {
+    if(this.messageEditBusy?.has(threadId)&&capability!==messageEditCapability)throw fault('此会话正在修改消息，请稍候',409);
     if(['queue','removeQueued'].includes(action)&&capability!==queueCapability)throw fault('请使用专用队列接口',403);
     if(desktopReadOnly(threadId))throw fault('当前管理会话受保护，只读',403);
     const creator=threadPrincipals(this.accountHome||home).get(threadId);if(creator&&creator!==principal(this.accountHome||home))throw fault('这个桌面会话属于之前的账号，请切换回原账号后操作',409);

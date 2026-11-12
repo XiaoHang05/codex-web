@@ -18,24 +18,26 @@ test('last user message editing cancels, regenerates once, keeps drafts and imag
  try{
   const {startStandalone}=await import('../src/standalone.js');running=await startStandalone({port:0});
   const manager=running.service.context.codex;browser=await chromium.launch({executablePath:process.env.CHROMIUM_BIN,headless:true});
-  for(const width of [1280,390]){
+  for(const [width,runningEdit] of [[1280,false],[390,false],[1280,true],[390,true]]){
    const {thread}=await manager.rpc('default','thread/start',{cwd:workspace});
    await manager.rpc('default','turn/start',{threadId:thread.id,input:[{type:'text',text:'Earlier question'}]});await delay(25);
-   const old=await manager.rpc('default','turn/start',{threadId:thread.id,input:[{type:'text',text:'Original question'},image]});await delay(25);
+   const old=await manager.rpc('default','turn/start',{threadId:thread.id,input:[{type:'text',text:'Original question'},image],...(runningEdit?{fixtureHold:true}:{})});await delay(25);
    const page=await browser.newPage({viewport:{width,height:850}}),errors=[];let posts=0;
    page.on('pageerror',error=>errors.push(error.message));page.on('request',request=>{if(new URL(request.url()).pathname==='/codex-api/v1/message-edit'&&request.method()==='POST')posts++;});
    await page.goto(new URL('/codex/?profile=default&thread='+thread.id,running.url).href);
-   const edit=page.getByRole('button',{name:'修改消息并重新生成',exact:true});await edit.waitFor({state:'attached',timeout:10000}).catch(async failure=>{console.error(JSON.stringify({width,errors,body:(await page.locator('body').innerText()).slice(-5000)}));throw failure;});assert.equal(await edit.count(),1);
+   const edit=page.getByRole('button',{name:'修改消息并重新生成',exact:true});await edit.waitFor({state:'attached',timeout:10000}).catch(async failure=>{console.error(JSON.stringify({width,runningEdit,errors,body:(await page.locator('body').innerText()).slice(-5000)}));throw failure;});assert.equal(await edit.count(),1);
    const observer=await browser.newPage({viewport:{width,height:850}});await observer.goto(page.url());await observer.locator('.message.user').filter({hasText:'Original question'}).waitFor();
    await page.locator('#input').fill('Unsent composer draft');
    const latest=page.locator('.message.user').last();if(width===390)await latest.locator(':scope>span').first().click();else await latest.hover();
    assert.equal(await edit.evaluate(button=>button.previousElementSibling.getAttribute('aria-label')),'复制消息');
    await edit.click();let dialog=page.getByRole('dialog',{name:'修改最后一条消息',exact:true});await dialog.waitFor();
    await dialog.getByRole('textbox',{name:'修改最后一条消息',exact:true}).fill('Cancelled edit');await dialog.getByRole('button',{name:'取消',exact:true}).click();await dialog.waitFor({state:'detached'});assert.equal(posts,0);
+   if(runningEdit){assert.equal((await manager.rpc('default','thread/read',{threadId:thread.id,includeTurns:true})).thread.turns.at(-1).status,'inProgress');assert.equal(manager.instances.get('default').active.get(thread.id),old.turn.id);}
    if(width===390)await latest.locator(':scope>span').first().click();else await latest.hover();await edit.click();dialog=page.getByRole('dialog',{name:'修改最后一条消息',exact:true});
    const field=dialog.getByRole('textbox',{name:'修改最后一条消息',exact:true});assert.equal(await field.inputValue(),'Original question');await field.fill('Revised question '+width);
    const response=page.waitForResponse(response=>response.url().endsWith('/codex-api/v1/message-edit')&&response.request().method()==='POST');
-   await dialog.getByRole('button',{name:'保存并重新生成',exact:true}).evaluate(button=>{button.click();button.click();});assert.equal((await response).status(),200);
+   if(runningEdit)assert.match(await dialog.innerText(),/先停止当前生成/);
+   await dialog.getByRole('button',{name:runningEdit?'停止并重新生成':'保存并重新生成',exact:true}).evaluate(button=>{button.click();button.click();});assert.equal((await response).status(),200);
    await dialog.waitFor({state:'detached'});await page.locator('.message.user').filter({hasText:'Revised question '+width}).waitFor();
    await observer.locator('.message.user').filter({hasText:'Revised question '+width}).waitFor();assert.equal(await observer.locator('[data-turn-id="'+old.turn.id+'"]').count(),0);await observer.close();
    assert.equal(posts,1);assert.equal(await page.locator('.message.user').count(),2);assert.equal(await page.locator('[data-turn-id="'+old.turn.id+'"]').count(),0);
@@ -51,7 +53,7 @@ test('last user message editing cancels, regenerates once, keeps drafts and imag
    await dialog.getByRole('button',{name:'保存并重新生成',exact:true}).click();await dialog.getByRole('alert').filter({hasText:'fixture outcome uncertain'}).waitFor();
    assert.equal(await dialog.getByRole('textbox',{name:'修改最后一条消息',exact:true}).inputValue(),'Keep this failed edit');assert.equal(await dialog.getByRole('button',{name:'保存并重新生成',exact:true}).isDisabled(),true);
    await dialog.getByRole('button',{name:'取消',exact:true}).click();assert.deepEqual(errors,[]);
-   console.log(JSON.stringify({width,editPosts:posts,earlierTurnPreserved:true,attachmentPreserved:true,reload:true,pageErrors:errors}));await page.close();
+   console.log(JSON.stringify({width,runningEdit,editPosts:posts,earlierTurnPreserved:true,attachmentPreserved:true,reload:true,pageErrors:errors}));await page.close();
   }
  }finally{await browser?.close();await running?.close();fs.rmSync(root,{recursive:true,force:true});}
 });
