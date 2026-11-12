@@ -21,6 +21,11 @@ export function userContent(raw,item={}){
       if(kind)contexts.push({kind,text:value});else visible.push(value);
     }
     if(contexts.length)text=visible.join('\n').trim();
+    else if(item.content.some(part=>['image','input_image','localImage'].includes(part?.type))){
+      // Images are separate attachments, not empty text paragraphs.
+      if(visible.length)text=visible.join('\n');
+      else if(!text.trim())text='';
+    }
   }else{
     const environment=text.indexOf('\n<environment_context>');
     if(/^# AGENTS\.md instructions(?: for [^\r\n]+)?\r?\n/.test(text)&&environment>=0){

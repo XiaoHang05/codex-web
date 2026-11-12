@@ -1,9 +1,10 @@
 import {commandDialog} from './slash-commands.js';
 import {mountDetailsMenu} from './menu-motion.js';
-export function workspaceChrome(env){
+import {workspaceStorage} from './workspace-storage.js';
+export async function workspaceChrome(env){
  const {$,notice}=env,pane=new URLSearchParams(location.search).has('pane');if(pane){document.body.classList.add('embedded-chat');return {selected(){},saveDraft(){},restoreDraft(){},detachMissing:()=>false,draftProfile:()=>null,matchesSelection:()=>false,activeId:()=>null,pinned:()=>false,newChat:()=>env.clear()};}
  const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))||fallback;}catch{return fallback;}};
- const legacy=read('codex-chat-tabs',[]),saved=read('codex-workspace',null);
+ const storage=await workspaceStorage(env.draftDatabase,{notice}),legacy=read('codex-chat-tabs',[]),saved=storage.value;
  const draftKey=record=>record.key||record.row?.key||'draft:'+record.id;
  let current=saved?.current||legacy.find(record=>record.id===localStorage.getItem('codex-active-tab'))||{id:crypto.randomUUID(),mode:'web'};
  if(new URLSearchParams(location.search).has('fresh'))current={id:crypto.randomUUID(),mode:'web'};
@@ -18,7 +19,7 @@ export function workspaceChrome(env){
  async function copy(text){if(!text)throw Error('暂无可复制内容');await navigator.clipboard.writeText(text);notice('已复制');}
  async function copyLink(share){const selected=env.selected();if(!selected)throw Error('请先打开会话');const url=link(selected);if(share&&navigator.share)await navigator.share({title:selected.name||'Codex 聊天',url});else{await copy(url);if(share)notice('已复制链接，访问者仍需通过网站鉴权');}}
  function updatePin(){const selected=env.selected();pin.firstElementChild.textContent=env.pinnedRow(selected)?'取消置顶':'置顶';for(const button of [rename,fork,archive]){button.disabled=!selected||selected.mode!=='web';button.title=button.disabled?'桌面原实例暂未开放此操作':'';}}
- function save(){try{localStorage.setItem('codex-workspace',JSON.stringify({current,drafts}));}catch{notice('浏览器存储空间不足，草稿暂未保存');}}
+ function save(){storage.save({current,drafts});}
  const storedDraft=key=>key?localStorage.getItem('codex-draft:'+key)||'':'';
  function saveDraft(){clearTimeout(draftTimer);current.draft=$('input').value;current.attachments=env.attachments();if(!current.threadId)current.profile=env.profile();if($('composer-model').options.length>1)current.composer={model:$('composer-model').value,reasoning:$('reasoning').value,access:$('access').value,approval:$('approval').value,options:{...env.options()}};drafts[draftKey(current)]={...current};save();}
  for(const id of ['composer-model','reasoning','access','approval'])$(id).addEventListener('change',()=>queueMicrotask(saveDraft));
