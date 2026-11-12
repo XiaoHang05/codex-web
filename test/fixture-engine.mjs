@@ -23,6 +23,14 @@ for await(const line of readline.createInterface({input:process.stdin})){
     }
     case 'thread/read':case 'thread/resume':result={thread:threads.get(params.threadId),model:'fixture-model'};break;
     case 'thread/goal/get':result={goal:null};break;
+    case 'thread/revert':{
+      const thread=threads.get(params.threadId),at=thread?.turns.findIndex(turn=>turn.id===params.beforeTurnId);
+      if(!thread||at<0){send({id,error:{message:'Unknown fixture turn'}});continue;}
+      thread.turns.splice(at);result={thread};break;
+    }
+    case 'thread/rollback':{
+      const thread=threads.get(params.threadId);thread.turns.splice(-params.numTurns);result={thread};break;
+    }
     case 'turn/start':{
       const thread=threads.get(params.threadId),turn={id:'fixture-turn-'+(++sequence),status:'completed',items:[{id:'fixture-user-'+sequence,type:'userMessage',content:params.input},{id:'fixture-answer-'+sequence,type:'agentMessage',text:'Fixture response **ready**.'}]};
       if(!thread){send({id,error:{message:'Unknown fixture thread'}});continue;}

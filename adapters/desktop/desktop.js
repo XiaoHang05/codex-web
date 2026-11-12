@@ -13,6 +13,7 @@ import { fault, readJson } from '../../src/storage.js';
 import {validatePermissions,validateElicitation} from '../../public/codex/request-protocol.js';
 const versions = new Map([['initialize',0],['thread-follower-compact-thread',1],['thread-follower-update-thread-settings',2],['thread-follower-set-queued-follow-ups-state',1],['thread-follower-remove-queued-message',1],['thread-owner-discovery',1],['thread-follower-start-turn',2],['thread-follower-steer-turn',1],['thread-follower-interrupt-turn',4],['thread-follower-command-approval-decision',1],['thread-follower-file-approval-decision',1],['thread-follower-submit-user-input',1],['thread-follower-permissions-request-approval-response',1],['thread-follower-submit-mcp-server-elicitation-response',1]]);
 const home = path.join(os.homedir(), '.codex');
+versions.set('thread-follower-edit-last-user-turn',2);
 const queueCapability=Symbol('internal native composer queue');
 export function principal(directory = home) {
   const auth = readJson(path.join(directory, 'auth.json'), {});

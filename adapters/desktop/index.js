@@ -1,4 +1,5 @@
 import {Desktop,DesktopHistory} from './desktop.js';
+import {editDesktopMessage} from './message-edit.js';
 import {DesktopWatch} from './desktop-watch.js';
 import {DesktopNotifications} from './desktop-notifications.js';
 import {DesktopCompletions} from './desktop-completions.js';
@@ -32,6 +33,7 @@ export async function createDesktopAdapter(options, ctx, existing) {
   }
   return {
     desktop,history,
+    editLastMessage:(threadId,params)=>editDesktopMessage(desktop,threadId,params),
     imageReference:desktopImageReference,
     createQueue:(context,queue)=>new DesktopComposerQueue(context,queue),
     async list(){

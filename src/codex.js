@@ -143,6 +143,7 @@ export class CodexManager {
     i.threadMetadata.set(threadId,{...thread,webModelSettings:{...thread.webModelSettings,...patch}});
   }
   async rpc(id, method, params) {
+    if(this.instances.get(id)?.messageEditBusy?.has(params?.threadId)&&!['thread/read','account/read','model/list'].includes(method))throw fault('此会话正在修改最后一条消息，请稍候',409);
     const accountChange=['account/login/start','account/login/cancel','account/logout'].includes(method),newTurn=['turn/start','review/start','thread/compact/start'].includes(method);
     if(!accountChange&&!newTurn)return this.rpcUnlocked(id,method,params);
     const i=await this.start(id);

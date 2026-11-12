@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
 import {fault} from '../../src/storage.js';
+import {replacedMessageTurns} from '../../src/message-edit-history.js';
 
 const caches=new Map();
 function compactionStart(payload){return (Array.isArray(payload.replacement_history)?payload.replacement_history:[]).flatMap(item=>{if(item.type!=='message')return [];const text=(Array.isArray(item.content)?item.content:[]).filter(part=>['input_text','output_text','text'].includes(part.type)&&typeof part.text==='string').map(part=>part.text).join('\n');return text.trim()?[(item.role?item.role+'：\n':'')+text]:[];}).join('\n\n');}
@@ -81,5 +82,6 @@ export async function desktopHistoryPage(history,id,{cursor,limit=100}={}){
   const turn=data.turns.get(record.turnId),text=record.event?p.message:(p.content||[]).map(c=>c.text||'').join('\n');
   items.push({id:record.id,type:record.user?'userMessage':'agentMessage',phase:p.phase,text,...(record.user?{content:p.content}:{}),_sentAt:record.sentAt,_turnId:record.turnId,_steering:record.steering,_turnStatus:turn?.status,_completedAt:turn?.completedAt,_durationMs:turn?.durationMs,_processingStartedAt:turn?.startedAt,_replyComplete:turn?.status==='completed'&&data.lastReplies.get(record.turnId)===record.offset&&p.phase!=='commentary'});
  }}finally{await fd.close();}
- return {items,source:'desktop',hasMore:start>0,nextCursor:start>0?String(records[0].offset):null,totalMessages:data.records.length,fileBytes:stat.size};
+ const removed=new Set(replacedMessageTurns('desktop:'+id));
+ return {items:items.filter(item=>!removed.has(item._turnId)),source:'desktop',hasMore:start>0,nextCursor:start>0?String(records[0].offset):null,totalMessages:data.records.filter(record=>!removed.has(record.turnId)).length,fileBytes:stat.size};
 }

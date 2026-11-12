@@ -24,11 +24,11 @@ export function desktopTurnItems(turn,messages){
   const message=index.get(prefix);return [{...item,type:'userMessage',text:message?message.text:'追加指令正在同步…',content:message?.content||item.content,_sentAt:message?._sentAt,_steering:true}];
  });return turnItems({...turn,items});
 }
-export function userMetadata(element,item,content){
+export function userMetadata(element,item,content,{onEdit}={}){
   const actions=document.createElement('div');actions.className='user-actions';const historical=item._steering&&item._turnStatus&&item._turnStatus!=='inProgress';element.classList.toggle('historical-steering',!!historical);
   const raw=item._sentAt??item.timestamp??item.createdAt;if(raw&&!historical){const date=new Date(typeof raw==='number'?(raw<1e12?raw*1000:raw):raw);if(!Number.isNaN(date.getTime())){const time=document.createElement('time');time.dateTime=date.toISOString();time.textContent=date.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit',hourCycle:'h23'});time.title=date.toLocaleString('zh-CN',{hourCycle:'h23'});actions.append(time);}}
   if(item._deliveryStatus){const status=document.createElement('span');status.textContent=item._deliveryStatus==='sending'?'发送中':'发送结果待确认';status.className='user-delivery-status';element.append(status);}
-  actions.append(copyButton(content,'复制消息'));element.append(actions);element.addEventListener('click',()=>element.classList.toggle('show-metadata'));element.tabIndex=0;
+  actions.append(copyButton(content,'复制消息'));if(onEdit){const edit=document.createElement('button');edit.type='button';edit.className='copy-icon edit-user-message';edit.title='修改消息并重新生成';edit.setAttribute('aria-label',edit.title);edit.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 4 5 5M4 20l4-1L20 7a2.1 2.1 0 0 0-3-3L5 16Z"/></svg>';edit.onclick=async event=>{event.stopPropagation();edit.disabled=true;try{await onEdit();}finally{edit.disabled=false;}};actions.append(edit);}element.append(actions);element.addEventListener('click',()=>element.classList.toggle('show-metadata'));element.tabIndex=0;
 }
 const boundDisclosures=new WeakSet();
 export function mountDisclosures(root,{expanded=new Set(),restore=false}={}){let index=0;for(const details of root.querySelectorAll('details')){details.dataset.item||='body:'+root.dataset.item+':detail:'+index;index++;if(restore)details.open=expanded.has(details.dataset.item);if(boundDisclosures.has(details))continue;const summary=details.querySelector(':scope>summary');if(!summary)continue;const body=document.createElement('div');body.className='markdown-disclosure-body';for(const child of [...details.childNodes])if(child!==summary)body.append(child);details.append(body);animateDisclosure(details,body);}}

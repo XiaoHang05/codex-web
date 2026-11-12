@@ -68,5 +68,5 @@ export function historyPages({api,current,changed,notice,scroller}){
   }finally{if(generation===epoch){busy=false;paint();}}
  };
  button.onclick=()=>load().catch(error=>notice(error.message));
- return {reset(row=null){epoch++;target=row;archive=[];cursor=null;more=false;busy=false;paint();},start:()=>load(true),items:()=>archive,async restoreCount(count){const generation=epoch;while(generation===epoch&&more&&archive.length<count){const before=archive.length,previousCursor=cursor;await load();if(archive.length<=before||cursor===previousCursor)break;}},decorate(nodes){if(target&&current()===target&&more)nodes.splice(nodes[0]?.dataset.item==='session-context'?1:0,0,button);}};
+ return {discardTurn(turnId){epoch++;busy=false;archive=archive.filter(item=>item._turnId!==turnId);paint();changed(archive);},reset(row=null){epoch++;target=row;archive=[];cursor=null;more=false;busy=false;paint();},start:()=>load(true),items:()=>archive,async restoreCount(count){const generation=epoch;while(generation===epoch&&more&&archive.length<count){const before=archive.length,previousCursor=cursor;await load();if(archive.length<=before||cursor===previousCursor)break;}},decorate(nodes){if(target&&current()===target&&more)nodes.splice(nodes[0]?.dataset.item==='session-context'?1:0,0,button);}};
 }

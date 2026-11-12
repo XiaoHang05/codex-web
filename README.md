@@ -61,6 +61,8 @@ node --env-file=.env src/standalone.js
 
 鉴权、生命周期、事件流与数据所有权的要求见 [嵌入契约](docs/EMBEDDING.md)。每个进程使用一套存储路径；不同实例请分进程启动，重复配置为其他路径会明确报错。
 
+末条用户消息的铅笔按钮、重新生成、恢复记录及新增 HTTP/SSE 接口见 [消息修改](docs/MESSAGE-EDIT.md)。
+
 ## 验证与交付
 
 ```sh

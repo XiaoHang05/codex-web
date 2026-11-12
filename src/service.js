@@ -11,6 +11,7 @@ import {profileManagement} from './profile-management.js';
 import {projectDirectories} from './project-directories.js';
 import {inlineQuestionsRoute} from './inline-questions.js';
 import {composerQueueRoute} from './composer-queue-native.js';
+import {messageEditRoute} from './message-edit.js';
 import {composerPredictionsRoute} from './composer-predictions.js';
 import {artifacts} from './artifacts.js';
 import {LocalFileTickets} from './local-files.js';
@@ -140,6 +141,7 @@ export async function createCodexWeb(options) {
       for(const [matches,handler]of [
         [req.path.startsWith('/api/profile-management'),profileManagement],
         [req.path==='/api/composer-queue',composerQueueRoute],
+        [req.path==='/api/message-edit',messageEditRoute],
         [req.path==='/api/composer-predictions',composerPredictionsRoute],
         [req.path.startsWith('/api/inline-questions/'),inlineQuestionsRoute],
         [req.path.startsWith('/api/artifacts/'),artifacts],
