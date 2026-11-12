@@ -1,5 +1,5 @@
-import {Marked} from '/codex/vendor/marked.js';
-import katex from '/codex/vendor/katex/katex.mjs';
+import {Marked} from './vendor/marked.js';
+import katex from './vendor/katex/katex.mjs';
 import {fileCitationExtension} from './file-citations.js';
 
 // Tokenize before Markdown consumes formula backslashes and underscores.
@@ -22,9 +22,19 @@ function formula(source) {
 }
 const escape=text=>text.replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const placeholder=token=>`<span class="math-source" data-math-display="${token.display}">${escape(token.text)}</span>`;
-export const marked=new Marked({extensions:[
+export const marked=new Marked({tokenizer:{
+  lheading(source){
+    // Marked checks setext headings before it applies block-extension starts.
+    // A standalone '=' inside display math must not turn preceding text into a heading.
+    const heading=this.rules.block.lheading.exec(source);
+    if(heading)for(const open of heading[1].matchAll(/^ {0,3}(?:\\\[|\$\$)/gm)){
+      if(formula(source.slice(open.index).replace(/^ {0,3}/,''))?.display)return;
+    }
+    return false;
+  }
+},extensions:[
   fileCitationExtension,
-  {name:'blockMath',level:'block',start:source=>source.search(/^(?: {0,3})(?:\\\[|\$\$)/m),
+  {name:'blockMath',level:'block',start:source=>{const index=source.search(/\n {0,3}(?:\\\[|\$\$)/);return index<0?undefined:index+1;},
     tokenizer(source){const leading=source.match(/^ {0,3}/)[0],token=formula(source.slice(leading.length));if(token?.display)return {type:'blockMath',...token,raw:leading+token.raw};},
     renderer:token=>`<div class="math-block">${placeholder(token)}</div>\n`},
   {name:'inlineMath',level:'inline',start:source=>source.search(/\\[([]|\$/),
