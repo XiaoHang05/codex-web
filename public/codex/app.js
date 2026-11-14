@@ -73,7 +73,7 @@ mountMobileTopbar();
 mountMobileDocumentScroll();
 const timelineFollow=bottomFollow($('messages'));
 const loadBanner=$('chat-load'),liveEvents=new EventTarget();
-let viewLoad=null,liveReady=false,liveGeneration=0,booting=true,readyThread=null;
+let viewLoad=null,liveReady=false,liveGeneration=0,booting=true,readyThread=null,webStateRevision=0;
 function cancelViewLoad(){viewLoad?.abort();viewLoad=null;paintLoad(loadBanner,'');}
 function beginViewLoad(text){
  cancelViewLoad();
@@ -177,6 +177,10 @@ let restoreView=null,viewTimer,stopViewSettling;
 function storedView(scope){try{return JSON.parse(localStorage.getItem('codex-view:'+scope)||'null');}catch{return null;}}
 function saveView(){const scope=inputScope(),box=$('messages');if(!scope||restoreView&&!restoreView.ready)return;try{localStorage.setItem('codex-view:'+scope,JSON.stringify(captureChatView(box,desktopPages.items().length)));}catch{}}
 mountWorkScrollContainment($('messages'));
+// Once the reader interacts, streaming and late history must respect that view.
+const releaseRestoredView=()=>{stopViewSettling?.();stopViewSettling=null;restoreView=null;};
+for(const name of ['wheel','touchstart','pointerdown','disclosure-interaction','jump-latest'])$('messages').addEventListener(name,releaseRestoredView,{passive:true});
+window.addEventListener('keydown',event=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key)&&!event.target?.matches('input,textarea,[contenteditable="true"]'))releaseRestoredView();});
 $('messages').addEventListener('scroll',()=>{clearTimeout(viewTimer);viewTimer=setTimeout(saveView,140);},{passive:true});window.addEventListener('pagehide',saveView);document.addEventListener('visibilitychange',()=>{if(document.hidden)saveView();});
 function pendingInputs(scope){try{return JSON.parse(sessionStorage.getItem('accepted-inputs:'+scope)||'[]');}catch{return [];}}
 function rememberInput(scope,item){const items=pendingInputs(scope);items.push(item);try{sessionStorage.setItem('accepted-inputs:'+scope,JSON.stringify(items.slice(-80)));}catch{}if(inputScope()===scope)render(displayedItems);}
@@ -442,6 +446,7 @@ async function open(row,{restorePosition=true,carryDraft=false}={}){
     const pref=await loadingApi(`/codex-api/v1/session-preferences/${encodeURIComponent(row.mode==='web'?`web:${profile}:${row.threadId}`:`desktop:${row.threadId}`)}`);
     if(selected!==row)return;
     $('access').value=pref.access;$('approval').value=pref.approval;$('access').syncAppearance();$('approval').syncAppearance();
+    let resumeGeneration=null,resumeRevision=null;
     const catalog=modelCatalog();void catalog.catch(()=>{});
     if(row.mode==='web'&&profile!==previousProfile)void account(profile).catch(error=>notice(error.message));
     commandSkills=[];void refreshCommandSkills().catch(error=>{if(selected===row)notice('技能读取失败：'+error.message);});
@@ -451,8 +456,14 @@ async function open(row,{restorePosition=true,carryDraft=false}={}){
       await Promise.all([refreshDesktopMessages(),desktopPages.start()]);
     }else{
       paintLoad(loadBanner,'正在打开网页会话…',{busy:true});
+      const generation=liveReady?liveGeneration:null,revision=webStateRevision;
       const resumed=await rpc('thread/resume',{threadId:row.threadId},profile,loadingApi);
-      if(selected===row)modelSelection.actual(resumed);
+      if(selected!==row||load.signal.aborted)return;
+      modelSelection.actual(resumed);
+      if(resumed.thread?.id===row.threadId&&Array.isArray(resumed.thread.turns)){
+        await read(true,resumed);
+        resumeGeneration=generation;resumeRevision=revision;
+      }
     }
     if(selected!==row)return;
     await catalog;
@@ -460,7 +471,7 @@ async function open(row,{restorePosition=true,carryDraft=false}={}){
     const pending=restoreView;
     if(row.mode==='desktop'&&pending?.scope===scope&&pending.saved&&!pending.saved.bottom)await desktopPages.restoreCount(pending.saved.historyCount||0);
     if(selected!==row)return;
-    await connectThread(row,load);
+    await connectThread(row,load,resumeGeneration,resumeRevision);
     if(selected!==row)return;
     readyThread=row;setThreadReady(true);
     finishViewLoad(load);
@@ -481,7 +492,7 @@ function setThreadReady(ready){
  for(const id of ['send','steer'])$(id).disabled=!!blocked;
  paintQueue();
 }
-async function connectThread(row,load){
+async function connectThread(row,load,snapshotGeneration=null,snapshotRevision=null){
  const desktop=row.mode==='desktop';
  while(selected===row&&!load.signal.aborted){
    paintLoad(loadBanner,desktop?'正在连接桌面会话…':'正在连接实时消息…',{busy:true});
@@ -495,7 +506,7 @@ async function connectThread(row,load){
      await waitForLive(liveEvents,()=>!!desktopSnapshot||liveGeneration!==generation,load.signal,'桌面尚未同步当前会话');
    }else{
      paintLoad(loadBanner,'正在同步聊天记录…',{busy:true});
-     await read(true);
+     if(snapshotGeneration!==generation||snapshotRevision!==webStateRevision)await read(true);
    }
    if(liveReady&&generation===liveGeneration)return;
    if(desktop)desktopSnapshot=null;
@@ -517,7 +528,7 @@ async function reconnectThread(row){
 }
 
 let webReadEpoch=0,replyHydrationPending=false;
-async function read(initial=false){if(!selected||selected.mode!=='web'||!initial&&!chatStateReady)return;const epoch=++webReadEpoch,target=selected,activeProfile=profile;const result=await rpc('thread/read',{threadId:target.threadId,includeTurns:true},activeProfile,loadingApi);if(selected!==target||profile!==activeProfile||epoch!==webReadEpoch)return;const thread=result.thread;if(thread?.id!==target.threadId||!Array.isArray(thread.turns))throw Error('未收到当前会话的聊天记录');webQuestionTurns=thread.turns;modelSelection.actual(result);if(thread.webTokenUsage)threadUsage.set(target.threadId,thread.webTokenUsage);const previousActiveTurn=turnId,previousUsers=new Map(liveItems),retries=new Map([...liveItems.values()].filter(item=>item.type==='connectionRetry').map(item=>[item._turnId,item]));liveItems.clear();turnId=null;for(const turn of thread.turns||[]){if(turn.status==='inProgress')turnId=turn.id;const entries=turnItems(turn),retry=retries.get(turn.id),finalIndex=entries.findLastIndex(item=>item._replyComplete);if(retry)entries.splice(finalIndex<0?entries.length:finalIndex,0,{...retry,_turnStatus:turn.status});for(const item of entries)liveItems.set(item.id||crypto.randomUUID(),item);}turnId=turnId||retainUnpersistedTurn(liveItems,previousUsers,previousActiveTurn,thread.turns);mergeReplyRead(liveItems,previousUsers,{turns:thread.turns||[]});restoreLocalUsers(liveItems,previousUsers);render([...liveItems.values()]);paintQueue();stateLabel(thread.status?.type||'就绪');await requests();void drainQueue();}
+async function read(initial=false,snapshot){if(!selected||selected.mode!=='web'||!initial&&!chatStateReady)return;const epoch=++webReadEpoch,target=selected,activeProfile=profile;const result=snapshot??await rpc('thread/read',{threadId:target.threadId,includeTurns:true},activeProfile,loadingApi);if(selected!==target||profile!==activeProfile||epoch!==webReadEpoch)return;const thread=result.thread;if(thread?.id!==target.threadId||!Array.isArray(thread.turns))throw Error('未收到当前会话的聊天记录');webQuestionTurns=thread.turns;modelSelection.actual(result);if(thread.webTokenUsage)threadUsage.set(target.threadId,thread.webTokenUsage);const previousActiveTurn=turnId,previousUsers=new Map(liveItems),retries=new Map([...liveItems.values()].filter(item=>item.type==='connectionRetry').map(item=>[item._turnId,item]));liveItems.clear();turnId=null;for(const turn of thread.turns||[]){if(turn.status==='inProgress')turnId=turn.id;const entries=turnItems(turn),retry=retries.get(turn.id),finalIndex=entries.findLastIndex(item=>item._replyComplete);if(retry)entries.splice(finalIndex<0?entries.length:finalIndex,0,{...retry,_turnStatus:turn.status});for(const item of entries)liveItems.set(item.id||crypto.randomUUID(),item);}turnId=turnId||retainUnpersistedTurn(liveItems,previousUsers,previousActiveTurn,thread.turns);mergeReplyRead(liveItems,previousUsers,{turns:thread.turns||[]});restoreLocalUsers(liveItems,previousUsers);render([...liveItems.values()]);paintQueue();stateLabel(thread.status?.type||'就绪');void requests().catch(error=>{if(selected===target)notice(error.message);});void drainQueue();}
 function hasDesktopTimeline(state){return Array.isArray(state?.turns)||!!state?.turnHistory?.history;}
 function desktopState(state,{streaming=false}={}){if(selected?.mode!=='desktop'||!hasDesktopTimeline(state))return;desktopSnapshot=state;if(!syncDesktopSettings.pending&&modelSelection.actual(state))void modelCatalog().catch(error=>notice(error.message));if(!syncDesktopSettings.pending){const actual=desktopComposerSettings(state);let changed=false;for(const [key,value]of [['collaborationMode',actual.mode],['serviceTier',actual.serviceTier]])if(value!==undefined&&commandOptions[key]!==value){commandOptions={...commandOptions,[key]:value};changed=true;}if(changed)paintCommandOptions();for(const [id,value]of [['access',actual.access],['approval',actual.approval]])if(value&&$(id).value!==value){$(id).value=value;$(id).syncAppearance();}$('approval').title=actual.granular?'App 当前使用精细审批规则；选择其他策略会更新桌面设置':'';}if(Object.hasOwn(state,'threadGoal'))conversationUI.goal(state.threadGoal||null);turnId=activeDesktopTurn(state);if(turnId||awaitingDesktopStart&&(desktopTurns(state).at(-1)?.turnId||desktopTurns(state).at(-1)?.id)!==awaitingDesktopStart)awaitingDesktopStart=false;paintQueue();const items=desktopTurns(state).flatMap(turn=>desktopTurnItems(turn,desktopMessages));(streaming?renderStreaming:render)(mergeDesktopHistory(desktopPages.items(),items));stateLabel(selected.protected?'当前管理会话：只读':`桌面 · ${state.threadRuntimeStatus?.type||'已连接'}`);renderRequests(state.requests||[],true);void drainQueue();}
 async function requests(){const target=selected,id=profile;if(target?.mode!=='web')return;const pending=await loadingApi(`/codex-api/v1/codex/${id}/pending`);if(selected===target&&profile===id)renderRequests(pending,false);}
@@ -657,6 +668,7 @@ setInterval(()=>{if(selected?.mode!=='web'||!turnId||viewLoad||activeReadPending
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)void syncQueue().catch(()=>{});});
 function markFeedback(source,threadId){const row=rows.find(row=>row.threadId===threadId&&row.sources.includes(source));if(row&&selected?.key!==row.key&&!feedbackThreads.has(row.key)){feedbackThreads.add(row.key);renderThreads();}}
 events.addEventListener('codex',event=>{const x=JSON.parse(event.data);if(x.method==='account/login/completed'){login.completed(x.profile);if(x.profile===settingsProfile){account().then(settingsInfo).catch(()=>{});$('login-code').replaceChildren();notice(x.params?.success?'账号登录成功':'账号登录未完成');}void refresh().catch(()=>{});}const eventThread=x.params?.threadId;if(eventThread){if(isRecentCodexMessage(x))markRecent('web:'+x.profile,eventThread);if(x.method==='item/agentMessage/delta'||x.method==='item/completed'&&x.params?.item?.type==='agentMessage')markFeedback('web:'+x.profile,eventThread);if(['turn/started','turn/completed'].includes(x.method)){const row=rows.find(row=>row.threadId===eventThread&&row.sources.includes('web:'+x.profile));if(row){row.running=x.method==='turn/started';renderThreads();}void refresh().catch(()=>{});}if(x.id!==undefined||x.method==='serverRequest/resolved')void refresh().catch(()=>{});}if(x.profile!==profile)return;if(!selected||selected.mode!=='web'||(eventThread&&eventThread!==selected.threadId))return;
+  if(['turn/started','turn/completed','error'].includes(x.method))webStateRevision++;
   if(x.method==='error'&&(x.params?.willRetry||liveItems.has('retry:'+x.params?.turnId))){if(x.params?.willRetry)discardReplyDrafts(liveItems,x.params);recordConnectionError(liveItems,{...x.params,startedAt:[...liveItems.values()].find(item=>item._turnId===x.params?.turnId)?._processingStartedAt});renderStreaming([...liveItems.values()]);}
   if(x.method==='turn/started'){acceptStartedTurn(liveItems,x.params.turn);turnId=x.params.turn.id;paintQueue();stateLabel('执行中');liveItems.set('thinking:'+turnId,{type:'reasoning',_running:true,_turnId:turnId,_turnStatus:'inProgress',_processingStartedAt:x.params.turn.startedAt??Date.now()});renderStreaming([...liveItems.values()]);}
   if(x.method==='item/started'||x.method==='item/completed'){const timing=[...liveItems.values()].find(item=>item._turnId===(x.params.turnId||turnId)&&item._processingStartedAt);liveItems.delete('thinking:'+turnId);const item={...x.params.item,_turnId:x.params.turnId||turnId,_turnStatus:'inProgress',_processingStartedAt:timing?._processingStartedAt??Date.now(),_replyComplete:false,_running:x.method==='item/started'};const old=liveItems.get(item.id);if(old?._sentAt)item._sentAt=old._sentAt;if(item.type==='userMessage')acceptNativeUser(liveItems,item);else acceptReplyItem(liveItems,item,{completed:x.method==='item/completed'});const retry=liveItems.get('retry:'+item._turnId);if(retry&&retry._turnStatus==='inProgress')liveItems.set(retry.id,{...retry,_turnStatus:'completed'});renderStreaming([...liveItems.values()]);}
