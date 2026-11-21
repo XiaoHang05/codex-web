@@ -61,9 +61,11 @@ export async function composerQueueRoute(req,res,ctx){
    if(req.method!=='GET')throw fault('新版桌面暂不支持网站排队，请等待空闲后直接发送',409);
    res.json({scope,revision:0,items:[],nativeShared:false,reason:'新版桌面仅支持空闲时直接发送文字，排队请在 App 中操作'});return true;
   }
-  queue.sharedQueue ||= await ctx.desktopAdapter.createQueue(ctx,queue);
-  if(req.method==='GET'){const state=await queue.lock(scope,()=>queue.sharedQueue.read(scope));res.json(String(state.revision)===req.query?.since?{unchanged:true,revision:state.revision}:state);return true;}
-  if(req.method==='PUT'){res.json(await queue.sharedQueue.update(scope,req.body||{}));return true;}
+  queue.desktopSharedQueues ||= new WeakMap();
+  let shared=queue.desktopSharedQueues.get(ctx.desktop);
+  if(!shared){shared=await ctx.desktopAdapter.createQueue(ctx,queue);queue.desktopSharedQueues.set(ctx.desktop,shared);}
+  if(req.method==='GET'){const state=await queue.lock(scope,()=>shared.read(scope));res.json(String(state.revision)===req.query?.since?{unchanged:true,revision:state.revision}:state);return true;}
+  if(req.method==='PUT'){res.json(await shared.update(scope,req.body||{}));return true;}
   res.status(405).json({error:'不支持的队列操作'});return true;
  }
  if(req.method==='GET'){const identity=await queue.adapter.authorize(queueTarget(scope)),saved=queue.state(scope);if(saved.items.length&&saved.principal!==identity)throw fault('队列属于之前的账号，请切换回原账号',409);const state=queue.public(scope);res.json(String(state.revision)===req.query?.since?{unchanged:true,revision:state.revision}:state);return true;}

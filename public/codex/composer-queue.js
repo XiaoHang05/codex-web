@@ -38,6 +38,7 @@ export const queuedMessages={
  async write(scope,items){const state=snapshots.get(scope);if(!state)throw Error('队列尚未同步，请稍后重试');return remember(scope,await api(endpoint(scope),{revision:state.revision,items},'PUT'));},
  async retry(scope,id){return remember(scope,await api(endpoint(scope),{action:'retry',id},'PUT'));},
  async steer(scope,id){return remember(scope,await api(endpoint(scope),{action:'steer',id},'PUT'));},
+ async start(scope,id){return remember(scope,await api(endpoint(scope),{action:'start',id},'PUT'));},
  snapshot:scope=>snapshots.get(scope),
 };
 

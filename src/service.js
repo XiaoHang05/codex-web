@@ -75,7 +75,11 @@ export async function createCodexWeb(options) {
   internal.get('/api/health',(req,res)=>res.json({ready:true,service:'codex-web',contractVersion}));
   internal.get('/api/profiles',(req,res)=>res.json(ctx.config.profiles));
   internal.put('/api/profiles',async(req,res)=>res.json(await codex.updateProfile(req.body,ctx.save)));
-  internal.get('/api/status',(req,res)=>res.json({codex:codex.status(),desktop:{enabled:!!ctx.desktopAdapter,connected:!!ctx.desktop.socket?.writable,...(ctx.desktop.capabilities?{capabilities:ctx.desktop.capabilities}:{})}}));
+  internal.get('/api/status',async(req,res)=>{
+    let connected=!!ctx.desktop.socket?.writable;
+    if(ctx.desktop.capabilities?.transport==='stdio-relay-v1')try{connected=(await ctx.desktop.status()).connected===true;}catch{connected=false;}
+    res.json({codex:codex.status(),desktop:{enabled:!!ctx.desktopAdapter,connected,...(ctx.desktop.capabilities?{capabilities:ctx.desktop.capabilities}:{})}});
+  });
   internal.get('/api/history',async(req,res)=>res.json(await historyList(ctx)));
   internal.all('/api/project-notifications',(req,res)=>projectNotificationsRoute(req,res,{
     policy:projectNotifications,auth:ctx.auth,

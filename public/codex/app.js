@@ -58,7 +58,7 @@ import {workspaceChrome} from './workspace-chrome.js';
 import {savedChat} from './chat-selection.js';
 import {paintLoad,waitForLive} from './chat-load.js';
 import {slashCommands,commandDialog} from './slash-commands.js';
-import {limitedDesktop,limitedDesktopReason} from './desktop-capabilities.js';
+import {limitedDesktop,limitedDesktopReason,relayDesktop,desktopFeatureAvailable} from './desktop-capabilities.js';
 import {statusView} from './native-status.js';
 import {commandCatalog} from './command-catalog.js';
 import {questionReply,questionFields,compactionRecord,conversationStatus} from './conversation-ui.js';
@@ -172,15 +172,16 @@ let displayedItems=[];const updateNavigator=messageNavigator($('messages'));
 async function branchReply(item,target,activeProfile){try{const result=await api('/codex-api/v1/branches',{source:target.mode,profile:activeProfile,threadId:target.threadId,lastTurnId:item._turnId});await refresh();await open(rows.find(row=>row.threadId===result.thread.id)||{threadId:result.thread.id,name:'分支会话',cwd:result.thread.cwd,sources:['web:'+activeProfile]});}catch(error){notice(error.message);}}
 let desktopMessages=[],desktopSnapshot=null,desktopMessageStamp='';
 const limitedDesktopMode=()=>limitedDesktop(selected,serviceCapabilities.desktop.capabilities);
+const relayDesktopMode=()=>relayDesktop(selected,serviceCapabilities.desktop.capabilities);
 const directDesktopRequests=new Map(),limitedControls=new Map();let desktopCapabilityNote;
 function paintDesktopCapabilities(){
- const limited=limitedDesktopMode();
+ const limited=limitedDesktopMode();const relay=relayDesktopMode();
  for(const id of ['composer-model','reasoning','access','approval','composer-add','archive']){const control=$(id);if(limited){if(!limitedControls.has(control)){limitedControls.set(control,{disabled:control.disabled,title:control.title,...(['access','approval'].includes(id)?{innerHTML:control.innerHTML,value:control.value}:{})});if(['access','approval'].includes(id))control.replaceChildren(new Option(id==='access'?'权限由 App 管理':'审批由 App 管理',''));}control.disabled=true;control.title=limitedDesktopReason;}else if(limitedControls.has(control)){Object.assign(control,limitedControls.get(control));limitedControls.delete(control);}}
- if(limited&&!desktopCapabilityNote){desktopCapabilityNote=document.createElement('p');desktopCapabilityNote.className='muted';desktopCapabilityNote.style.cssText='font-size:12px;margin:0 8px 6px';desktopCapabilityNote.textContent='仅支持读取与空闲时发文字；停止、插话、审批等请用 App。';document.querySelector('.composer-wrap').prepend(desktopCapabilityNote);}if(desktopCapabilityNote)desktopCapabilityNote.hidden=!limited;
+ if(limited&&!desktopCapabilityNote){desktopCapabilityNote=document.createElement('p');desktopCapabilityNote.className='muted';desktopCapabilityNote.style.cssText='font-size:12px;margin:0 8px 6px';desktopCapabilityNote.textContent='仅支持读取与空闲时发文字；停止、插话、审批等请用 App。';document.querySelector('.composer-wrap').prepend(desktopCapabilityNote);}if(relay&&!desktopCapabilityNote){desktopCapabilityNote=document.createElement('p');desktopCapabilityNote.className='muted';desktopCapabilityNote.style.cssText='font-size:12px;margin:0 8px 6px';document.querySelector('.composer-wrap').prepend(desktopCapabilityNote);}if(desktopCapabilityNote){desktopCapabilityNote.hidden=!limited&&!relay;desktopCapabilityNote.textContent=relay?'已连接桌面中继；队列可在 App 执行，也可手动发送。':'仅支持读取与空闲时发文字；停止、插话、审批等请用 App。';}if(relay){$('archive').disabled=true;$('archive').title='请在 App 中归档聊天';}
  if(limited){for(const id of ['steer','interrupt']){$(id).disabled=true;$(id).title=limitedDesktopReason;}$('send').disabled=!chatStateReady||!!turnId||sendingTurn||!!selected.protected||!!selected.accountMismatch||!!selected.conflict;$('send').title=turnId?'请等待当前任务完成；排队与插话请在 App 中操作':'发送文字（沿用 App 设置）';$('send').setAttribute('aria-label','发送文字');}
 }
 const desktopPages=historyPages({api:loadingApi,current:()=>selected,changed:items=>{if(desktopSnapshot)desktopState(desktopSnapshot);else render(items);},notice,scroller:$('messages')});
-async function refreshDesktopMessages(){const target=selected;if(target?.mode!=='desktop')return;if(limitedDesktopMode()){const result=await loadingApi(`/codex-api/v1/desktop/${target.threadId}/follow`,{});if(selected!==target)return;desktopState(result.state);}const result=await loadingApi(`/codex-api/v1/desktop/${target.threadId}/messages`);if(selected!==target)return;const stamp=JSON.stringify(result.messages);if(stamp!==desktopMessageStamp){desktopMessages=result.messages;desktopMessageStamp=stamp;if(desktopSnapshot)desktopState(desktopSnapshot);}}
+async function refreshDesktopMessages(){const target=selected;if(target?.mode!=='desktop')return;if(limitedDesktopMode()||relayDesktopMode()){const result=await loadingApi(`/codex-api/v1/desktop/${target.threadId}/follow`,{});if(selected!==target)return;desktopState(result.state);}const result=await loadingApi(`/codex-api/v1/desktop/${target.threadId}/messages`);if(selected!==target)return;const stamp=JSON.stringify(result.messages);if(stamp!==desktopMessageStamp){desktopMessages=result.messages;desktopMessageStamp=stamp;if(desktopSnapshot)desktopState(desktopSnapshot);}}
 const inputScope=()=>selected?`${selected.mode}:${selected.mode==='web'?profile:'desktop'}:${selected.threadId}`:null;
 let restoreView=null,viewTimer,stopViewSettling;
 function storedView(scope){try{return JSON.parse(localStorage.getItem('codex-view:'+scope)||'null');}catch{return null;}}
@@ -364,7 +365,7 @@ function currentQueueScope(){return selected?(selected.mode==='web'?`web:${profi
 function currentTaskControl(){if(limitedDesktopMode())return {disabled:true,action:'stop',label:'请在 App 中操作',title:limitedDesktopReason};return taskControlState({turns:selected?.mode==='desktop'?desktopTurns(desktopSnapshot):webQuestionTurns,activeTurn:turnId,ready:!!selected&&chatStateReady,blocked:!!selected?.protected||!!selected?.conflict||!!selected?.accountMismatch,pending:sendingTurn||awaitingDesktopStart||queued.length>0||queueDispatching||queuePaused});}
 function currentMessageEdit(){
  const state=lastMessageEdit(selected?.mode==='desktop'?desktopTurns(desktopSnapshot):webQuestionTurns,{allowRunning:true});
- return {...state,editable:state.editable&&!limitedDesktopMode()&&!!selected&&chatStateReady&&(!turnId||turnId===state.turnId)&&!sendingTurn&&!awaitingDesktopStart&&!queued.length&&!selected.protected&&!selected.conflict&&!selected.accountMismatch};
+ return {...state,editable:state.editable&&desktopFeatureAvailable(selected,serviceCapabilities.desktop.capabilities,'edit')&&!!selected&&chatStateReady&&(!turnId||turnId===state.turnId)&&!sendingTurn&&!awaitingDesktopStart&&!queued.length&&!selected.protected&&!selected.conflict&&!selected.accountMismatch};
 }
 function discardEditedTurn(id){
  if(!id||!currentQueueScope())return;
@@ -383,18 +384,19 @@ async function openMessageEdit(item){
 function paintQueue(){
  paintDesktopCapabilities();
  for(const button of document.querySelectorAll('.edit-user-message'))button.disabled=!currentMessageEdit().editable;
- paintTaskControl($('interrupt'),currentTaskControl());paintDesktopCapabilities();
- const queuedMode=!!selected&&(!!turnId||awaitingDesktopStart||sendingTurn||queued.length>0||!chatStateReady);$('send').title=queuedMode?'加入发送队列（当前任务完成后发送）':'发送消息';$('send').setAttribute('aria-label',queuedMode?'加入发送队列':'发送消息');
+ paintTaskControl($('interrupt'),currentTaskControl());$('steer').disabled=!turnId||!chatStateReady||sendingTurn||!!selected?.protected||!!selected?.conflict||!!selected?.accountMismatch;paintDesktopCapabilities();
+ const queuedMode=!!selected&&(!!turnId||awaitingDesktopStart||sendingTurn||queued.length>0||!chatStateReady);$('send').title=queuedMode?(relayDesktopMode()?'加入 App 队列（可手动发送）':'加入发送队列（当前任务完成后发送）'):'发送消息';$('send').setAttribute('aria-label',queuedMode?'加入发送队列':'发送消息');
  queueBox.replaceChildren();queueBox.hidden=!queued.length;if(!queued.length)return;
  const header=document.createElement('div');header.className='composer-queue-header';header.dataset.layoutKey='queue-header';const heading=document.createElement('strong');heading.textContent=`排队发送 · ${queued.length} 条`;const hint=document.createElement('span');hint.textContent=queuePaused?'发送结果待确认，请检查聊天记录':queueDispatching?'正在发送队首消息':queuedMessages.snapshot(queueScope)?.reason||(queuedMessages.snapshot(queueScope)?.nativeShared?'已同步到 App 队列，审批沿用 App 设置':'已保存到后端，任务完成后依次发送');header.append(heading,hint);
- if(queuePaused){const retry=document.createElement('button');retry.type='button';retry.textContent='确认重试';retry.onclick=async()=>{if(!confirm('请先检查聊天记录。确认这条消息尚未发出，需要重新发送？'))return;try{await queueAction('retry',queued[0].id);}catch(error){notice(error.message);}};header.append(retry);}queueBox.append(header);
+ if(queuePaused&&desktopFeatureAvailable(selected,serviceCapabilities.desktop.capabilities,'queueRetry')){const retry=document.createElement('button');retry.type='button';retry.textContent='确认重试';retry.onclick=async()=>{if(!confirm('请先检查聊天记录。确认这条消息尚未发出，需要重新发送？'))return;try{await queueAction('retry',queued[0].id);}catch(error){notice(error.message);}};header.append(retry);}queueBox.append(header);
  for(const [index,item]of queued.entries()){
   const row=document.createElement('div');row.className='composer-queue-item';row.dataset.layoutKey='queue:'+item.id;const content=document.createElement('div');content.className='composer-queue-content';const label=document.createElement('span');label.textContent=item.text||'图片消息';label.title=label.textContent;content.append(label);if(item.images?.length){const media=document.createElement('span');media.className='composer-queue-media';for(const [imageIndex,image]of item.images.entries()){const thumbnail=imageThumbnail(image.url,{mode:selected?.mode||'web',profile,threadId:selected?.threadId||''},{eager:true,zoom:true});thumbnail.type='button';thumbnail.setAttribute('aria-label','查看第 '+(imageIndex+1)+' 张排队图片');media.append(thumbnail);}content.append(media);}if(item.skill){const skill=document.createElement('small');skill.textContent='技能 · '+item.skill.name;content.append(skill);}const actions=document.createElement('div');actions.className='composer-queue-actions';
   const action=(name,run,disabled=false)=>{const button=document.createElement('button');button.type='button';button.textContent=name;button.disabled=queueDispatching||disabled;button.onclick=()=>Promise.resolve(run()).catch(error=>notice(error.message));actions.append(button);};
-  action('编辑',async()=>{if($('input').value.trim()||pendingImages.length||pendingSkill)throw Error('请先处理输入框中尚未发送的草稿');await changeQueue(items=>items.filter(entry=>entry.id!==item.id));$('input').value=item.text;pendingImages=[...(item.images||[])];pendingSkill=item.skill||null;paintCommandOptions();$('input').dispatchEvent(new Event('input',{bubbles:true}));workspace.saveDraft();$('input').focus();});
+  action('编辑',async()=>{if($('input').value.trim()||pendingImages.length||pendingSkill)throw Error('请先处理输入框中尚未发送的草稿');await changeQueue(items=>items.filter(entry=>entry.id!==item.id));$('input').value=item.text;pendingImages=[...(item.images||[])];pendingSkill=item.skill||null;paintCommandOptions();$('input').dispatchEvent(new Event('input',{bubbles:true}));workspace.saveDraft();$('input').focus();},item.nativeInputUnsupported===true);
   action('上移',()=>changeQueue(items=>{const copy=[...items];[copy[index-1],copy[index]]=[copy[index],copy[index-1]];return copy;}),index===0);
   action('下移',()=>changeQueue(items=>{const copy=[...items];[copy[index+1],copy[index]]=[copy[index],copy[index+1]];return copy;}),index===queued.length-1);
-  action('引导',()=>queueAction('steer',item.id),!turnId||!!item.skill||!!selected?.protected||!!selected?.conflict||!!selected?.accountMismatch||item.status==='uncertain');
+  if(relayDesktopMode())action('发送',()=>queueAction('start',item.id),!!turnId||!!selected?.protected||!!selected?.accountMismatch);
+  action('引导',()=>queueAction('steer',item.id),!desktopFeatureAvailable(selected,serviceCapabilities.desktop.capabilities,'queueSteer')||!turnId||!!item.skill||!!selected?.protected||!!selected?.conflict||!!selected?.accountMismatch||item.status==='uncertain');
   action('删除',()=>changeQueue(items=>items.filter(entry=>entry.id!==item.id)));
   row.append(content,actions);queueBox.append(row);
  }
@@ -567,7 +569,7 @@ async function submitSteering(draft){
  const target=selected,id=profile,activeTurn=turnId,scope=inputScope(),value=draft.text||'',input=[{type:'text',text:value},...(draft.images||[])];if(!activeTurn)throw Error('当前没有执行中的轮次');if(!value&&!draft.images?.length)throw Error('请输入追加指令或附加图片');
  const baseline=displayedItems.filter(item=>item.type==='userMessage'&&text(item)===value).length+pendingInputs(scope).filter(item=>item.text===value).length;
  const sentAt=Date.now(),afterItem=pendingInputs(scope).at(-1)?.id||displayedItems.at(-1)?.id;
- if(target.mode==='desktop')await api(`/codex-api/v1/desktop/${target.threadId}/steer`,{input});else await rpc('turn/steer',{threadId:target.threadId,expectedTurnId:activeTurn,input},id);
+ if(target.mode==='desktop')await api(`/codex-api/v1/desktop/${target.threadId}/steer`,{input,expectedTurnId:activeTurn,...(relayDesktopMode()?{requestId:crypto.randomUUID()}:{})});else await rpc('turn/steer',{threadId:target.threadId,expectedTurnId:activeTurn,input},id);
  markRecent(target.mode==='desktop'?'desktop':'web:'+id,target.threadId);
  if(value)rememberInput(scope,{id:'accepted:'+crypto.randomUUID(),type:'userMessage',text:value,_sentAt:sentAt,_baseline:baseline,_steering:true,_afterItem:afterItem,_turnId:activeTurn});
 }
@@ -582,11 +584,12 @@ bind('send',async()=>{
  const creation=modelParams(),draftOptions={...commandOptions},originalProfile=profile,originalTab=workspace.activeId();
  if(!selected){const result=await rpc('thread/start',creation,originalProfile);if(selected||profile!==originalProfile||workspace.activeId()!==originalTab)throw Error('聊天已切换，消息尚未发送');await api(`/codex-api/v1/sessions/${encodeURIComponent(`web:${originalProfile}:${result.thread.id}`)}`,draft.policy,'PUT');await refresh();if(selected||profile!==originalProfile||workspace.activeId()!==originalTab)throw Error('聊天已切换，消息尚未发送');await open(rows.find(r=>r.threadId===result.thread.id&&r.sources.includes('web:'+originalProfile))||{threadId:result.thread.id,name:'新会话',cwd:result.thread.cwd,sources:[`web:${originalProfile}`]},{carryDraft:true});if(selected?.threadId!==result.thread.id||profile!==originalProfile)throw Error('聊天已切换，消息尚未发送');commandOptions=draftOptions;delete commandOptions.cwd;workspace.saveDraft();localStorage.setItem('codex-command-options:'+(inputScope()||'new'),JSON.stringify(commandOptions));paintCommandOptions();}
  const target=selected;if(target.protected||target.conflict||target.accountMismatch)throw Error('此会话不能发送消息');
- if(limitedDesktopMode()){
+ if(limitedDesktopMode()||relayDesktopMode()&&!turnId&&!queued.length){
   if(turnId)throw Error('请等待任务完成后发送；新版桌面不支持网站排队或插话');
-  if(draft.images.length||draft.skill)throw Error('新版桌面仅支持文字，图片和技能请在 App 中发送');
-  const key=target.threadId+':'+draft.text;if(!directDesktopRequests.has(key))directDesktopRequests.set(key,draft.id);
-  await api(`/codex-api/v1/desktop/${target.threadId}/send`,{input:[{type:'text',text:draft.text}],requestId:directDesktopRequests.get(key)});
+  if(limitedDesktopMode()&&(draft.images.length||draft.skill))throw Error('新版桌面仅支持文字，图片和技能请在 App 中发送');
+  const nativeInput=[{type:'text',text:draft.text},...(draft.skill?[{type:'skill',...draft.skill}]:[]),...draft.images];
+  const key=target.threadId+':'+JSON.stringify(nativeInput);if(!directDesktopRequests.has(key))directDesktopRequests.set(key,draft.id);
+  await api(`/codex-api/v1/desktop/${target.threadId}/send`,{input:nativeInput,requestId:directDesktopRequests.get(key)});
   directDesktopRequests.delete(key);if(selected===target)clearSentDraft(draft);await refreshDesktopMessages();return;
  }
  await queueReady;
@@ -604,7 +607,7 @@ bind('interrupt',async()=>{
    if(target.mode==='desktop'){const response=await api(`/codex-api/v1/desktop/${target.threadId}/follow`,{});if(selected!==target)throw Error('会话已切换');if(!response.state)throw Error('等待桌面状态同步');desktopState(response.state);}else await read();
    const latest=currentTaskControl();
    if(selected!==target||latest.action!=='continue'||latest.turnId!==control.turnId||turnId||queued.length||target.protected||target.conflict||target.accountMismatch)throw Error('会话状态已变化，请确认后再继续');
-   const result=target.mode==='desktop'?await api(`/codex-api/v1/desktop/${target.threadId}/send`,{input:[],turnTrigger:'resume_interrupted_task',expectedTurnId:control.turnId}):await rpc('turn/start',{threadId:target.threadId,input:[],turnTrigger:'resume_interrupted_task',...modelParams(true)});
+   const result=target.mode==='desktop'?await api(`/codex-api/v1/desktop/${target.threadId}/send`,{input:[],turnTrigger:'resume_interrupted_task',expectedTurnId:control.turnId,...(relayDesktopMode()?{requestId:crypto.randomUUID()}:{})}):await rpc('turn/start',{threadId:target.threadId,input:[],turnTrigger:'resume_interrupted_task',...modelParams(true)});
    if(selected===target){if(result.turn?.id){turnId=result.turn.id;acceptStartedTurn(liveItems,result.turn);}else if(target.mode==='desktop'&&(desktopTurns(desktopSnapshot).at(-1)?.turnId||desktopTurns(desktopSnapshot).at(-1)?.id)===control.turnId)awaitingDesktopStart=control.turnId;}
    markRecent(target.mode==='desktop'?'desktop':'web:'+rowProfile(target),target.threadId);
   }finally{sendingTurn=false;paintQueue();}
@@ -702,7 +705,7 @@ events.addEventListener('codex',event=>{const x=JSON.parse(event.data);if(x.meth
 });
 events.addEventListener('desktop',event=>{const x=JSON.parse(event.data),activity=desktopActivity(x.state),previous=desktopFeedback.get(x.threadId);desktopFeedback.set(x.threadId,activity.feedback);if(recentActivity.desktopChanged(x.threadId,x.state))markRecent('desktop',x.threadId);if(previous===undefined||activity.feedback!==previous)refreshAfterActivity();if(previous!==undefined&&activity.feedback!==previous)markFeedback('desktop',x.threadId);const row=rows.find(row=>row.threadId===x.threadId&&row.sources.includes('desktop'));if(row){const changed=row.running!==activity.running||row.needsAttention!==activity.needsAttention;row.running=activity.running;row.needsAttention=activity.needsAttention;if(changed){renderThreads();refreshAfterActivity();}}if(selected?.mode==='desktop'&&selected.threadId===x.threadId&&x.state){const oldUsers=desktopTurns(desktopSnapshot).flatMap(turn=>turn.items||[]).filter(item=>['userMessage','steeringUserMessage','steered'].includes(item.type)).map(item=>item.id).join('|');const newUsers=desktopTurns(x.state).flatMap(turn=>turn.items||[]).filter(item=>['userMessage','steeringUserMessage','steered'].includes(item.type)).map(item=>item.id).join('|');desktopState(x.state,{streaming:true});liveEvents.dispatchEvent(new Event('change'));if(oldUsers!==newUsers)refreshDesktopMessages().catch(()=>{});}});
 events.addEventListener('message-edited',event=>{const update=JSON.parse(event.data);if(update.scope!==currentQueueScope())return;discardEditedTurn(update.replacedTurnId);if(selected?.mode==='web')void read().catch(()=>{});else void refreshDesktopMessages().catch(()=>{});});
-events.addEventListener('desktop-offline',event=>{if(serviceCapabilities.desktop.capabilities?.transport==='app-tools-v1'&&JSON.parse(event.data||'{}').transport!=='app-tools-v1')return;for(const row of rows)if(row.sources.includes('desktop')){row.running=false;row.needsAttention=false;}renderThreads();if(selected?.mode==='desktop'){
+events.addEventListener('desktop-offline',event=>{if(serviceCapabilities.desktop.capabilities?.transport&&JSON.parse(event.data||'{}').transport!==serviceCapabilities.desktop.capabilities.transport)return;for(const row of rows)if(row.sources.includes('desktop')){row.running=false;row.needsAttention=false;}renderThreads();if(selected?.mode==='desktop'){
  const row=selected;desktopSnapshot=null;stateLabel('桌面离线，不会自动接管');setThreadReady(false);
  if(!viewLoad&&row===readyThread)paintLoad(loadBanner,'桌面已离线 · 可查看已加载的聊天记录',{retry:()=>void reconnectThread(row)});
 }});
