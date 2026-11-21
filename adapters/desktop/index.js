@@ -16,15 +16,24 @@ import {desktopModelCatalog} from '../../src/model-settings.js';
 import {nativePolicy} from '../../src/preferences.js';
 import {fault} from '../../src/storage.js';
 import {desktopTurns,activeDesktopTurn} from '../../public/codex/desktop-turn-state.js';
+import {AppToolsDesktop,discoverAppToolsPipe} from './app-tools.js';
 
 // Desktop sharing depends on a platform-specific, versioned native IPC surface.
 // It is loaded only by explicit configuration or an authenticated embedder.
 export async function createDesktopAdapter(options, ctx, existing) {
   if(!existing && (typeof options.homeDirectory!=='string'||!options.homeDirectory)) throw Error('Desktop sharing requires an explicit homeDirectory');
-  const desktop=existing?.desktop||new Desktop({homeDirectory:options.homeDirectory,...(options.pipe?{pipe:options.pipe}:{})});
   const history=existing?.history||new DesktopHistory(options.homeDirectory);
+  const sharedKey=Symbol.for('codex-web.desktop-app-tools.v1');
+  const useAppTools=options.discoverAppTools===true&&!existing?.desktop?.socket?.writable&&!options.pipe&&discoverAppToolsPipe();
+  let desktop;
+  if(useAppTools){
+    desktop=existing?.desktop?.[sharedKey]||new AppToolsDesktop(history,{emit:ctx.emit});
+    Object.setPrototypeOf(desktop,AppToolsDesktop.prototype);
+    if(existing?.desktop)existing.desktop[sharedKey]=desktop;
+  }else desktop=existing?.desktop||new Desktop({homeDirectory:options.homeDirectory,...(options.pipe?{pipe:options.pipe}:{})});
+  const modern=desktop instanceof AppToolsDesktop;
   const owned=!existing;
-  if(owned){
+  if(owned&&!modern){
     desktop.manualFollow ||= new Set();
     desktop.notificationObserver=new DesktopNotifications(ctx.notifications);
     desktop.on('state',data=>{if(desktop.manualFollow.has(data.threadId))ctx.emit('desktop',data);desktop.notificationObserver.observe(data);});
@@ -45,6 +54,11 @@ export async function createDesktopAdapter(options, ctx, existing) {
       });
     },
     async handle(req,res,context){
+      if(modern&&req.path==='/api/desktop-projects/capabilities'){res.json({create:false,reason:'新版桌面暂不支持网站新建聊天，请在 App 中新建'});return true;}
+      if(modern&&req.path.startsWith('/api/desktop-projects/'))throw fault('新版桌面暂不支持网站新建聊天',409);
+      if(modern&&req.path.startsWith('/api/inline-questions/desktop/'))throw fault('请在 App 中回答问题',409);
+      if(modern&&req.path.startsWith('/api/desktop-features/')&&['settings','compact'].includes(req.path.split('/').at(-1)))throw fault('新版桌面暂不支持网站修改设置或压缩',409);
+      if(modern&&req.method!=='GET'&&req.path.startsWith('/api/desktop-management/'))throw fault('新版桌面暂不支持此管理操作，请在 App 中操作',409);
       if(req.path.startsWith('/api/desktop-projects/')){
         if(options.projectRoutes&&await options.projectRoutes(req,res,context))return true;
         if(req.path==='/api/desktop-projects/capabilities'){res.json({create:false,reason:'此适配器未配置桌面新会话助手'});return true;}
@@ -67,13 +81,14 @@ export async function createDesktopAdapter(options, ctx, existing) {
       let params=req.body||{};
       if(action==='send'){
         const recovery=params.turnTrigger==='resume_interrupted_task';
+        if(modern&&params.turnTrigger!==undefined)throw fault('新版桌面仅支持文字发送，请在 App 中继续任务',409);
         if(params.turnTrigger!==undefined&&!recovery)throw fault('无效轮次触发方式');
         if(recovery){
           if(!Array.isArray(params.input)||params.input.length||typeof params.expectedTurnId!=='string'||!params.expectedTurnId)throw fault('继续任务需要空输入和原轮次');
           const state=await desktop.follow(threadId),latest=desktopTurns(state).at(-1);
           if(!latest||(latest.turnId||latest.id)!==params.expectedTurnId||!['interrupted','failed'].includes(latest.status)||activeDesktopTurn(state)||['active','running','inProgress','busy'].includes(state?.threadRuntimeStatus?.type)||(state?.requests||[]).some(request=>request.completed!==true&&request.request?.completed!==true))throw fault('会话状态已变化，请刷新后再继续',409);
         }
-        params={turnStart:{request:{threadId,input:params.input,...(recovery?{turnTrigger:'resume_interrupted_task'}:{}),...nativePolicy(context.preferences.registerSession(`desktop:${threadId}`))},context:{inheritThreadSettings:true}}};
+        params={...(modern?{requestId:params.requestId}:{}),turnStart:{request:{threadId,input:params.input,...(recovery?{turnTrigger:'resume_interrupted_task'}:{}),...nativePolicy(context.preferences.registerSession(`desktop:${threadId}`))},context:{inheritThreadSettings:true}}};
       }
       res.json(await desktop.control(threadId,action,params));return true;
     },

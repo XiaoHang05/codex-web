@@ -70,12 +70,12 @@ export async function createCodexWeb(options) {
   }
   }
   internal.use((req,res,next)=>{try{ctx.auth.requireSession(req);if(!['GET','HEAD'].includes(req.method))ctx.auth.csrf(req);next();}catch(error){next(error);}});
-  internal.get('/api/capabilities',(req,res)=>res.json({contractVersion,apiPrefix,standalone:!options.embedded,desktop:{enabled:!!ctx.desktopAdapter},browserState:{queueDatabase:'codex-web-composer-queue',...options.browserState},features:{chat:true,attachments:true,approvals:true}}));
+  internal.get('/api/capabilities',(req,res)=>res.json({contractVersion,apiPrefix,standalone:!options.embedded,desktop:{enabled:!!ctx.desktopAdapter,...(ctx.desktop.capabilities?{capabilities:ctx.desktop.capabilities}:{})},browserState:{queueDatabase:'codex-web-composer-queue',...options.browserState},features:{chat:true,attachments:true,approvals:true}}));
   internal.get('/api/application',(req,res)=>res.json({service:'codex-web',version:packageVersion,contractVersion,hotReload:!!options.embedded,release:options.assetVersion||null}));
   internal.get('/api/health',(req,res)=>res.json({ready:true,service:'codex-web',contractVersion}));
   internal.get('/api/profiles',(req,res)=>res.json(ctx.config.profiles));
   internal.put('/api/profiles',async(req,res)=>res.json(await codex.updateProfile(req.body,ctx.save)));
-  internal.get('/api/status',(req,res)=>res.json({codex:codex.status(),desktop:{enabled:!!ctx.desktopAdapter,connected:!!ctx.desktop.socket?.writable}}));
+  internal.get('/api/status',(req,res)=>res.json({codex:codex.status(),desktop:{enabled:!!ctx.desktopAdapter,connected:!!ctx.desktop.socket?.writable,...(ctx.desktop.capabilities?{capabilities:ctx.desktop.capabilities}:{})}}));
   internal.get('/api/history',async(req,res)=>res.json(await historyList(ctx)));
   internal.all('/api/project-notifications',(req,res)=>projectNotificationsRoute(req,res,{
     policy:projectNotifications,auth:ctx.auth,

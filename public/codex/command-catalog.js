@@ -1,4 +1,5 @@
 import {feedbackDialog} from './feedback-ui.js';
+import {desktopCommandSupported,limitedDesktopReason} from './desktop-capabilities.js';
 import {mcpView,statusView} from './native-status.js';
 import {sketch} from './sketch.js';
 import {gitView} from './git-view.js';
@@ -9,7 +10,7 @@ export function commandCatalog(env){
  const select=id=>()=>[...$(id).options].map(option=>({label:option.textContent,description:option.selected?'当前选项':'',run:()=>{ $(id).value=option.value;$(id).dispatchEvent(new Event('change',{bubbles:true}));notice('已选择 '+option.textContent);}}));
  const settings=tab=>async()=>{await $('account').onclick();document.querySelector('[data-settings="'+tab+'"]').click();};
  const draft=text=>()=>{$('input').value=text;$('input').dispatchEvent(new Event('input',{bubbles:true}));};
- return ()=>{const {selected,profile,turnId}=state(),web=selected?.mode==='web'&&!selected.protected&&!selected.conflict,webOnly=web?null:selected?.mode==='desktop'?'当前桌面共享协议没有此操作的原生入口':'请先打开会话',writable=!!selected&&!selected.protected&&!selected.conflict&&!selected.accountMismatch,writeOnly=writable?null:'请先打开可操作的会话',idle=turnId?'请等待当前任务结束后操作':null;
+ return ()=>{const {selected,profile,turnId,desktopCapabilities}=state(),web=selected?.mode==='web'&&!selected.protected&&!selected.conflict,webOnly=web?null:selected?.mode==='desktop'?'当前桌面共享协议没有此操作的原生入口':'请先打开会话',writable=!!selected&&!selected.protected&&!selected.conflict&&!selected.accountMismatch,writeOnly=writable?null:'请先打开可操作的会话',idle=turnId?'请等待当前任务结束后操作':null;
   const commands=[
    item('new','新建独立原生会话',()=>$('new').onclick()),
    item('project','选择已有项目、浏览目录或输入路径，用于新聊天',()=>env.chooseProject()),
@@ -53,6 +54,7 @@ export function commandCatalog(env){
    item('help','查看 Web 命令与原生接口支持范围',()=>commandDialog('命令帮助','输入 / 搜索命令，↑↓ 选择，Enter 或 Tab 执行，Esc 关闭。\n\n快速模式与推理强度独立，档位来自原生模型目录。\n\n桌面与独立 Web 实例均支持计划模式、模型、推理、速度和权限设置、上下文压缩、技能、文件与图片、排队和引导。桌面目标仅可查看，单独暂停及其他管理仍需在 App 中操作；未被 App 引擎持有的桌面历史聊天可归档与恢复；引擎持有的聊天会明确拒绝归档。目标创建、编辑、继续和清除，以及分支、重命名与原生审查仍需 App 提供共享入口。\n\n技能选择后加入待发送消息，由你点击发送。\n云端任务、插件安装管理、后台终端停止等尚未接入；/stop 当前仅中断轮次，不会终止进程。'))
   ];
   const labels={feedback:'▤ 反馈',pet:'♙ 虚拟宠物',project:'▱ 在项目中使用 Codex',sketch:'〰 绘图',usage:'◴ 使用情况和计费',new:'＋ 新建聊天',resume:'◷ 继续聊天',fork:'⑂ 分支到新聊天',rename:'✎ 重命名',archive:'▣ 归档',archives:'▣ 已归档聊天',model:'◇ 模型',reasoning:'◉ 推理',fast:'ϟ 快速',permissions:'◈ 访问权限',approvals:'☑ 审批策略',plan:'☷ 计划模式',agent:'▷ 执行模式',compact:'⇥ 压缩上下文',review:'⌕ 代码审查',skills:'▧ 技能',mcp:'♧ MCP',status:'◴ 状态',goal:'◎ 目标',git:'⑂ Git',diff:'± 文件改动',mention:'@ 引用文件',init:'✎ 项目指令',stop:'■ 中断轮次',settings:'⚙ 设置',account:'◴ 使用情况和计费',login:'↗ 登录',provider:'◇ 模型提供方',runtime:'⌘ 运行信息',help:'? 帮助'};for(const command of commands)command.label=labels[command.name];
+  if(selected?.mode==='desktop'&&desktopCapabilities?.transport==='app-tools-v1'){for(const command of commands){if(!desktopCommandSupported(command.name))command.disabled=limitedDesktopReason;if(command.name==='help')command.run=()=>commandDialog('命令帮助',limitedDesktopReason+'。文字发送沿用 App 当前模型和权限设置；其他命令的可用状态见菜单。');}return commands;}
   return [...commands,...env.skills().map(skill=>({name:'skill:'+skill.name,label:skill.interface?.displayName||skill.name,description:skill.description||skill.shortDescription,group:'技能',run:()=>env.useSkill(skill)}))];
   async function review(target){if(!confirm('启动一次原生代码审查？这会使用模型额度。'))return;await api('/codex-api/v1/conversation-command',{profile,threadId:selected.threadId,action:'review',target});await env.read();}
  };
