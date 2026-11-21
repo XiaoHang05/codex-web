@@ -5,7 +5,7 @@ import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {createDesktopRelay,relayDescriptorActive} from './relay-server.js';
 
-export function isAppServerMain(args){const index=args.indexOf('app-server');if(index<0||args.includes('--help')||args.includes('-h'))return false;return !['daemon','proxy','generate-ts','generate-json-schema','help'].includes(args[index+1]);}
+export function isAppServerMain(args){const index=args.indexOf('app-server');if(index<0||args.includes('--help')||args.includes('-h')||args.includes('--print-startup-config'))return false;return !['daemon','proxy','generate-ts','generate-json-schema','help'].includes(args[index+1]);}
 export async function runRelayCli(args=process.argv.slice(2),env=process.env){
  const binary=env.CODEX_WEB_RELAY_NATIVE_BINARY;if(!binary||!path.isAbsolute(binary))throw Error('An absolute original native binary is required');
  const home=env.CODEX_HOME||path.join(os.homedir(),'.codex'),nativeEnv={...env};delete nativeEnv.CODEX_CLI_PATH;

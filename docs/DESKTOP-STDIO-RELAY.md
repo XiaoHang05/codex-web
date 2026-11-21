@@ -52,7 +52,9 @@ Inspect its owner before repairing it. The token must never be logged or placed
 in a browser response or public download.
 
 The relay CLI forwards ordinary native CLI calls, including version/help/schema
-commands, to the configured original binary. It wraps only a main app-server
+commands and the one-shot `--print-startup-config` policy probe, to the
+configured original binary. The policy probe must retain its standalone JSON
+output and must not claim or inspect a main relay's home lock. It wraps only a main app-server
 invocation. A second main invocation for an active relay home fails closed.
 The native child never inherits the wrapper override recursively.
 

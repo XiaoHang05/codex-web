@@ -1,4 +1,5 @@
 import readline from 'node:readline';
+if(process.argv.includes('--print-startup-config')){process.stdout.write(JSON.stringify({appServerVersion:'fixture-version',configRequirements:{requirements:null}},null,2)+'\n');process.exit(0);}
 const lines=readline.createInterface({input:process.stdin});
 const emit=value=>process.stdout.write(JSON.stringify(value)+'\n');
 for await(const line of lines){

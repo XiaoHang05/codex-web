@@ -6,7 +6,7 @@ import net from 'node:net';
 import {PassThrough} from 'node:stream';
 import {EventEmitter} from 'node:events';
 import {fileURLToPath} from 'node:url';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import {createDesktopRelay} from '../adapters/desktop/relay-server.js';
 import {isAppServerMain,runRelayCli} from '../adapters/desktop/relay-cli.js';
 
@@ -79,8 +79,16 @@ test('native queue mutations map fixed identifiers and do not auto-start existin
 test('native disconnect rejects pending operations and removes only its own descriptor',async t=>{
  const {call,child,relay,home}=await fixture(t,{onRequest:message=>message.method==='turn/start'?false:undefined});const waiting=call('send',{requestId:'disconnect',input:[{type:'text',text:'fixture'}]});await tick();child.exitCode=1;child.emit('exit',1);const result=await Promise.race([waiting,new Promise(resolve=>setTimeout(()=>resolve(null),100))]);assert.ok(!result||result.error);await relay.close(false);assert.equal(fs.existsSync(path.join(home,'desktop-relay.json')),false);assert.equal(child.killed,false);
 });
-test('CLI wraps only app-server main and leaves version/schema/proxy invocations native',()=>{
- assert.equal(isAppServerMain(['-c','fixture=true','app-server','--analytics-default-enabled']),true);for(const args of [['--version'],['app-server','--help'],['app-server','generate-json-schema','--out','fixture'],['app-server','proxy']])assert.equal(isAppServerMain(args),false);
+test('CLI wraps only app-server main and leaves version/schema/proxy/startup invocations native',()=>{
+ assert.equal(isAppServerMain(['-c','fixture=true','app-server','--analytics-default-enabled']),true);for(const args of [['--version'],['app-server','--help'],['app-server','generate-json-schema','--out','fixture'],['app-server','proxy'],['app-server','--print-startup-config','--startup-client-info','{}']])assert.equal(isAppServerMain(args),false);
+});
+
+test('desktop startup policy probe preserves standalone JSON and does not claim the live relay home',t=>{
+ const home=fs.mkdtempSync(path.join(root,'startup-'));t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
+ const lock=path.join(home,'desktop-relay.lock');fs.writeFileSync(lock,'existing owner');
+ const cliFile=fileURLToPath(new URL('../adapters/desktop/relay-cli.js',import.meta.url)),fixtureFile=fileURLToPath(new URL('./fixture-relay-engine.mjs',import.meta.url));
+ const result=spawnSync(process.execPath,[cliFile,fixtureFile,'app-server','--print-startup-config','--startup-client-info','{}'],{env:{...process.env,CODEX_HOME:home,CODEX_WEB_RELAY_NATIVE_BINARY:process.execPath},windowsHide:true,stdio:['ignore','pipe','pipe'],encoding:'utf8',timeout:10000});
+ assert.equal(result.error,undefined);assert.equal(result.status,0,result.stderr);assert.equal(result.stderr,'');assert.deepEqual(JSON.parse(result.stdout),{appServerVersion:'fixture-version',configRequirements:{requirements:null}});assert.equal(fs.readFileSync(lock,'utf8'),'existing owner');assert.equal(fs.existsSync(path.join(home,'desktop-relay.json')),false);
 });
 test('an active relay locks its home and CLI refuses to launch a second native engine',async t=>{
  const {home,child}=await fixture(t);
